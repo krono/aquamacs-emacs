@@ -14,7 +14,15 @@
   if it doesn't already exist
 \end{itemize}
 
-\subsection{Changes--- 3.6}
+\subsection{Changes---3.6.1}
+\begin{itemize}
+\item Backported patch to fix local command injection vulnerability in
+  etags (See
+  \url{https://debbugs.gnu.org/cgi/bugreport.cgi?bug=59817}.)
+  (CVE-2022-48337)
+\end{itemize}
+
+\subsection{Changes---3.6}
 \begin{itemize}
 \item Applied patch to correctly list colors on the Mac
 \item Build with libxml2 since it is bundled with Xcode
