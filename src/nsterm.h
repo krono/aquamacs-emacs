@@ -650,6 +650,22 @@ enum ns_return_frame_mode
 @end
 
 
+/* ==========================================================================
+
+   File open/save panels
+   This and next override methods to handle keyboard input in panels.
+
+   ========================================================================== */
+
+@interface EmacsSavePanel : NSSavePanel
+{
+}
+@end
+@interface EmacsOpenPanel : NSOpenPanel
+{
+}
+@end
+
 @interface EmacsFileDelegate : NSObject
 {
 }
@@ -785,6 +801,9 @@ extern EmacsMenu *svcsMenu;
 #define KEY_NS_POWER_OFF               ((1<<28)|(0<<16)|1)
 #define KEY_NS_OPEN_FILE               ((1<<28)|(0<<16)|2)
 #define KEY_NS_OPEN_TEMP_FILE          ((1<<28)|(0<<16)|3)
+#define KEY_NS_DRAG_FILE               ((1<<28)|(0<<16)|4)
+#define KEY_NS_DRAG_COLOR              ((1<<28)|(0<<16)|5)
+#define KEY_NS_DRAG_TEXT               ((1<<28)|(0<<16)|6)
 #define KEY_NS_CHANGE_FONT             ((1<<28)|(0<<16)|7)
 #define KEY_NS_OPEN_FILE_LINE          ((1<<28)|(0<<16)|8)
 #define KEY_NS_PUT_WORKING_TEXT        ((1<<28)|(0<<16)|9)
@@ -793,6 +812,20 @@ extern EmacsMenu *svcsMenu;
 #define KEY_NS_NEW_FRAME               ((1<<28)|(0<<16)|12)
 #define KEY_NS_TOGGLE_TOOLBAR          ((1<<28)|(0<<16)|13)
 #define KEY_NS_SHOW_PREFS              ((1<<28)|(0<<16)|14)
+#define KEY_NS_CHANGE_COLOR            ((1<<28)|(0<<16)|17)
+#define KEY_NS_CHECK_SPELLING          ((1<<28)|(0<<16)|20)
+#define KEY_NS_SPELLING_CHANGE         ((1<<28)|(0<<16)|21)
+#define KEY_NS_TOGGLE_FULLSCREEN       ((1<<28)|(0<<16)|22)
+#define KEY_NS_APPLICATION_ACTIVATED   ((1<<28)|(0<<16)|90)
+#define KEY_NS_APPLICATION_OPEN_UNTITLED ((1<<28)|(0<<16)|91)
+#define KEY_NS_APPLICATION_REOPEN      ((1<<28)|(0<<16)|92)
+#define KEY_NS_APPLICATION_RESTORE     ((1<<28)|(0<<16)|93)
+#define KEY_NS_APPLICATION_STORE_STATE ((1<<28)|(0<<16)|94)
+#define KEY_NS_ABOUT                   ((1<<28)|(0<<16)|130)
+#define KEY_NS_CHECK_FOR_UPDATES       ((1<<28)|(0<<16)|131)
+#define KEY_NS_TOOLBAR_CUSTOMIZED      ((1<<28)|(0<<16)|132)
+#define KEY_NS_SAVE_PANEL_CLOSED       ((1<<28)|(0<<16)|133)
+
 
 /* Could use list to store these, but rest of emacs has a big infrastructure
    for managing a table of bitmap "records".  */
@@ -1146,6 +1179,11 @@ ns_defined_color (struct frame *f,
                   bool makeIndex);
 
 #ifdef __OBJC__
+
+#ifdef AQUAMACS_EMACS
+extern Lisp_Object ns_color_to_lisp (NSColor *col);
+#endif /*AQUAMACS_EMACS*/
+
 extern int ns_lisp_to_color (Lisp_Object color, NSColor **col);
 extern const char *ns_get_pending_menu_title (void);
 #endif
@@ -1197,6 +1235,7 @@ extern void syms_of_nsterm (void);
 extern void syms_of_nsfns (void);
 extern void syms_of_nsmenu (void);
 extern void syms_of_nsselect (void);
+extern void syms_of_nsaquamacs (void);
 
 /* From nsimage.m, needed in image.c */
 struct image;

@@ -2417,7 +2417,10 @@ If you set `term-file-prefix' to nil, this function does nothing."
   :group 'faces)
 
 (defface default
-  '((t nil)) ; If this were nil, face-defface-spec would not be set.
+  '((((type ns))
+     :height 120 :family "Monaco" :weight normal :width normal
+     :slant normal :underline nil :strike-through nil)
+    (t nil))
   "Basic default face."
   :group 'basic-faces)
 
@@ -2763,6 +2766,18 @@ Use the face `mode-line-highlight' for features that can be selected."
   :group 'mode-line-faces
   :group 'basic-faces)
 
+(defface mode-line-flags
+   '((t (:family "sansserif")))
+   "Face used for MULE and Modified parts of the mode line."
+   :version "22.1"
+   :group 'mode-line-faces
+   :group 'basic-faces)
+
+;; Make `modeline' an alias for `mode-line', for compatibility.
+(put 'modeline 'face-alias 'mode-line)
+(put 'modeline-inactive 'face-alias 'mode-line-inactive)
+(put 'modeline-highlight 'face-alias 'mode-line-highlight)
+
 (defface header-line
   '((default
      :inherit mode-line)
@@ -2875,7 +2890,9 @@ used to display the prompt text."
       (append minibuffer-prompt-properties (list 'face 'minibuffer-prompt)))
 
 (defface fringe
-  '((((class color) (background light))
+  '((((type ns))
+     :foreground "grey55")
+    (((class color) (background light))
      :background "grey95")
     (((class color) (background dark))
      :background "grey10")

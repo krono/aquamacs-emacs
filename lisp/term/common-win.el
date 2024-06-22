@@ -402,12 +402,15 @@ For X, the list comes from the `rgb.txt' file,v 10.41 94/02/20.
 For Nextstep, this is a list of non-PANTONE colors returned by
 the operating system.")
 
+;; Colors need to be set at runtime (not at compile-time/preload)
+(if (featurep 'ns) (setq x-colors (ns-list-colors)))
+
 (defvar w32-color-map)
 
 (defun xw-defined-colors (&optional frame)
   "Internal function called by `defined-colors', which see."
   (if (featurep 'ns)
-      x-colors
+      (ns-list-colors)
     (or frame (setq frame (selected-frame)))
     (let (defined-colors)
       (dolist (this-color (if (eq system-type 'windows-nt)

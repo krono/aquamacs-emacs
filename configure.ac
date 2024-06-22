@@ -2025,7 +2025,7 @@ if test "${with_ns}" != no; then
   # Even a headless Emacs can build macuvs.h, so this should let you bootstrap.
   if test "${opsys}" = darwin && test -f "$srcdir/src/macuvs.h"; then
      NS_IMPL_COCOA=yes
-     ns_appdir=`pwd`/nextstep/Emacs.app
+     ns_appdir=`pwd`/nextstep/Aquamacs.app
      ns_appbindir=${ns_appdir}/Contents/MacOS
      ns_applibexecdir=${ns_appdir}/Contents/MacOS/libexec
      ns_applibdir=${ns_appdir}/Contents/Frameworks
@@ -2177,7 +2177,7 @@ if test "${HAVE_NS}" = yes; then
      INSTALL_ARCH_INDEP_EXTRA=
   fi
 
-  NS_OBJC_OBJ="nsterm.o nsfns.o nsmenu.o nsselect.o nsimage.o $ns_fontfile"
+  NS_OBJC_OBJ="nsterm.o nsfns.o nsmenu.o nsselect.o nsimage.o $ns_fontfile nsaquamacs.o"
 fi
 CFLAGS="$tmp_CFLAGS"
 CPPFLAGS="$tmp_CPPFLAGS"
@@ -6468,7 +6468,7 @@ case "$opsys" in
      libs_nsgui="-framework AppKit"
      if test "$NS_IMPL_COCOA" = "yes"; then
         libs_nsgui="$libs_nsgui -framework IOKit -framework Carbon \
-                    -framework IOSurface -framework QuartzCore"
+                    -framework IOSurface -framework Quartz"
         if test "$emacs_cv_macosx_12_0" = "yes"; then
 	  libs_nsgui="$libs_nsgui -framework UniformTypeIdentifiers"
 	fi
@@ -6751,7 +6751,7 @@ if test "$HAVE_NS" = "yes"; then
    echo
    AS_ECHO(["Run '${MAKE-make}' to build Emacs, then run 'src/emacs' to test it.
 Run '${MAKE-make} install' in order to build an application bundle.
-The application will go to nextstep/Emacs.app and can be run or moved
+The application will go to nextstep/Aquamacs.app and can be run or moved
 from there."])
    if test "$EN_NS_SELF_CONTAINED" = "yes"; then
       echo "The application will be fully self-contained."
@@ -6896,6 +6896,43 @@ if $gl_gnulib_enabled_dynarray || $gl_gnulib_enabled_scratch_buffer; then
     AS_MKDIR_P([lib/deps/malloc])
   fi
 fi
+
+dnl Add additional tests for compatibility functions on Mac OS. These
+dnl depend on the preprocessor checking compatibility when we compile
+dnl the program, so the macro specifies the include file to use. Similar
+dnl to AC_CHECK_FUNC.
+dnl
+dnl The problem is that autoconf normally checks to see if a function is
+dnl available by compiling a very simple test program to see if it links.
+dnl But the way that the Mac OS compiler checks for compatibility with older
+dnl versions is implemented in the header files using the C preprocessor,
+dnl so we need a test program that includes the right header file. The
+dnl CHECK_MAC_COMPAT macro does that. Putting the checks here at the end
+dnl makes sure we override any previous checks just before the config.h
+dnl header is generated.
+
+m4_define([CHECK_MAC_COMPAT], [
+    AC_MSG_CHECKING([Mac backwards compabitility for $1])                                      dnl Make a program to compile to check for it
+
+    mac_compat_$1=0
+    pushdef(prog, [#include <sys/stat.h>
+                   int main(int argc, char **argv) {
+                      $1(0, 0, 0, 0);
+                   }])
+
+    AC_COMPILE_IFELSE([AC_LANG_SOURCE([prog])], [mac_compat_$1=1], [mac_compat_$1=0])
+    if test $mac_compat_$1 = 1
+    then
+        AC_MSG_RESULT(yes)
+    else
+        AC_MSG_RESULT(no)
+        AC_DEFINE(AS_TR_CPP([HAVE_]$1), 0)
+    fi
+])
+
+CHECK_MAC_COMPAT(utimensat)
+CHECK_MAC_COMPAT(futimens)
+CHECK_MAC_COMPAT(clock_gettime)
 
 AC_OUTPUT
 

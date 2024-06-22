@@ -65,6 +65,86 @@ conveniently adding tool bar items."
        (= 1 (length (default-value 'tool-bar-map))) ; not yet setup
        (tool-bar-setup)))
 
+(defun tool-bar-set-file-extension (image-spec-list extension)
+  "Set new file extensions for all :file properties
+Replace any extensions of :file properties in elements of
+IMAGE-SPEC-LIST. An extension may start with a period . or an
+underscore. EXTENSION and the original file name extension (starting
+with a period) are added to the file name.
+
+E.g. foo_dis.xpm becomes foo_sel.xpm if EXTENSION is '_sel'."
+  (mapcar
+   (lambda (spec)
+     (let ((f (plist-get spec :file))
+	   )
+       (if (null f)
+	   spec
+	 ;; need to replace previous extensions, including those
+	 ;; starting with _ -
+	 (plist-put spec :file (concat (replace-regexp-in-string "[\.\_].*$"
+								 "" f)
+				       extension
+				       (file-name-extension f t)))
+	 )))
+   image-spec-list))
+
+(defvar tool-bar-load-png-only nil) ;; PNG and TIFF images only
+(defun tool-bar--image-expression-2 (icon)
+  (let* ((fg (face-attribute 'tool-bar :foreground))
+	 (bg (face-attribute 'tool-bar :background))
+	 (colors (nconc (if (eq fg 'unspecified) nil (list :foreground fg))
+			(if (eq bg 'unspecified) nil (list :background bg))))
+	 (xpm-spec (list :type 'xpm :file (concat icon ".xpm")))
+	 (xpm-lo-spec (if (> (display-color-cells) 256)
+			  nil
+			(list :type 'xpm :file
+                              (concat "low-color/" icon ".xpm"))))
+	 (tiff-spec (if (image-type-available-p 'tiff)
+		       (list :type 'tiff :file (concat icon ".tiff")
+			     :background "grey")))
+	 (png-spec (if (image-type-available-p 'png)
+		       (list :type 'png :file (concat icon ".png")
+			     :background "grey")))
+	 (pbm-spec (append (list :type 'pbm :file
+                                 (concat icon ".pbm")) colors))
+	 (xbm-spec (append (list :type 'xbm :file
+                                 (concat icon ".xbm")) colors))
+	 ;; (format-spec (if (display-color-p)
+	 ;; 		  (list png-spec xpm-lo-spec xpm-spec pbm-spec xbm-spec)
+	 ;; 		(list pbm-spec xbm-spec xpm-lo-spec xpm-spec)))
+	 (format-spec (if tool-bar-load-png-only
+			  (list tiff-spec png-spec)
+			  (list png-spec xpm-lo-spec xpm-spec pbm-spec xbm-spec)))
+	 (image (find-image format-spec))
+	 (image-sel (find-image
+		     (if (display-color-p)
+			 (tool-bar-set-file-extension
+			  format-spec
+			  "_sel")
+		       nil)))
+	 (image-dis (find-image
+		     (if (display-color-p)
+			 (tool-bar-set-file-extension
+			  format-spec
+			  "_dis")
+		       nil)))
+	 (images (when image ;; image may be nil if not found.
+		   ;; batch-compiling may lead to non-existant frames,
+		   ;; in which case image-mask-p will fail.
+		    (unless (condition-case nil (image-mask-p image) (error t))
+		     (setq image (append image '(:mask heuristic))))
+		   (if (and image-sel image-dis)
+		       (progn
+			 (unless (condition-case nil (image-mask-p image-sel) (error t))
+			   (setq image-sel (append image-sel
+						   '(:mask heuristic))))
+			 (unless (condition-case nil (image-mask-p image-dis) (error t))
+			   (setq image-dis (append image-dis
+						   '(:mask heuristic))))
+			 (vector image-sel image image-dis image-dis))
+		     image))))
+    (cons image images)))
+
 ;;;###autoload
 ;; Used in the Show/Hide menu, to have the toggle reflect the current frame.
 (defun toggle-tool-bar-mode-from-frame (&optional arg)
@@ -129,7 +209,8 @@ color capability and based on the available image libraries."
 		(if (not (display-images-p))
 		    (setq bind nil)
 		  (let ((image (eval image-exp)))
-		    (unless (and image (image-mask-p image))
+		    (unless (and image
+				 (condition-case nil (image-mask-p image) (error t)))
 		      (setq image (append image '(:mask heuristic))))
 		    (setq bind (copy-sequence bind)
 			  plist (nthcdr (if (consp (nth 4 bind)) 5 4)
@@ -274,19 +355,34 @@ holds a keymap."
   (tool-bar-add-item-from-menu 'dired "diropen" nil :vert-only t)
   (tool-bar-add-item-from-menu 'kill-this-buffer "close" nil :vert-only t)
   (tool-bar-add-item-from-menu 'save-buffer "save" nil
-			       :label "Save")
-  (define-key-after (default-value 'tool-bar-map) [separator-1] menu-bar-separator)
-  (tool-bar-add-item-from-menu 'undo "undo" nil)
+			       :label "Save"
+			       :visible '(or buffer-file-name
+					     (not (eq 'special
+						      (get major-mode
+							   'mode-class)))))
+  (tool-bar-add-item-from-menu 'write-file "saveas" nil
+			       :label "Save As"
+			       :visible '(or buffer-file-name
+					     (not (eq 'special
+						      (get major-mode
+							                           'mode-class)))))
+  (tool-bar-add-item-from-menu 'undo "undo" nil
+			       :visible '(not (eq 'special (get major-mode
+								'mode-class))))
   (define-key-after (default-value 'tool-bar-map) [separator-2] menu-bar-separator)
   (tool-bar-add-item-from-menu (lookup-key menu-bar-edit-menu [cut])
-			       "cut" nil :vert-only t)
+			       "cut" nil :vert-only t
+			       :enable '(not (eq 'special (get major-mode
+							       'mode-class))))
   (tool-bar-add-item-from-menu (lookup-key menu-bar-edit-menu [copy])
 			       "copy" nil :vert-only t)
   (tool-bar-add-item-from-menu (lookup-key menu-bar-edit-menu [paste])
-			       "paste" nil :vert-only t)
+			       "paste" nil :vert-only t
+			       :enable '(not (eq 'special (get major-mode
+							       'mode-class))))
   (define-key-after (default-value 'tool-bar-map) [separator-3] menu-bar-separator)
-  (tool-bar-add-item-from-menu 'isearch-forward "search"
-			       nil :label "Search" :vert-only t)
+  (tool-bar-add-item-from-menu 'nonincremental-search-forward "search"
+			       nil :label "Search")
   ;;(tool-bar-add-item-from-menu 'ispell-buffer "spell")
 
   ;; There's no icon appropriate for News and we need a command rather
@@ -299,8 +395,22 @@ holds a keymap."
   ;; 				(interactive)
   ;; 				(popup-menu menu-bar-help-menu))
   ;; 		       'help
-  ;; 		       :help "Pop up the Help menu"))
-)
+
+
+  ;; tool-bar-add-item-from-menu itself operates on
+  ;; (default-value 'tool-bar-map), but when we don't use that function,
+  ;; we must explicitly operate on the default value.
+
+  (let ((tool-bar-map (default-value 'tool-bar-map)))
+    (tool-bar-add-item "preferences" 'customize 'customize :label "Customize"
+		       :help "Edit preferences (customize)")
+
+    (tool-bar-add-item "help" (lambda ()
+				(interactive)
+				(popup-menu menu-bar-help-menu))
+		       'help
+		       :label "Help"
+		       :help "Pop up the Help menu")))
 
 (if (featurep 'move-toolbar)
     (defcustom tool-bar-position 'top

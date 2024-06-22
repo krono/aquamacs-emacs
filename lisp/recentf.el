@@ -384,14 +384,34 @@ See also the option `recentf-auto-cleanup'.")
 
 ;;; File functions
 ;;
+
+(defun recentf-shorten-file-name (filename)
+  "Shorten the file name (use ~/ if possible)."
+  (let ((h (expand-file-name "~/"))
+	(f (recentf-expand-file-name filename)))
+    (if (eq t (compare-strings h 0 nil f 0 (length h)))
+	(concat "~/" (substring f (length h)))
+      f)))
+
 (defun recentf-push (filename)
   "Push FILENAME into the recent list, if it isn't there yet.
 If it is there yet, move it at the beginning of the list.
-If `recentf-case-fold-search' is non-nil, ignore case when comparing
-filenames."
+If `recentf-initialize-file-name-history' is non-nil, update
+the file name history in the same way. If `recentf-case-fold-search'
+is non-nil, ignore case when comparing filenames."
   (let ((m (recentf-string-member filename recentf-list)))
     (and m (setq recentf-list (delq (car m) recentf-list)))
-    (push filename recentf-list)))
+    (push filename recentf-list))
+  (when (and recentf-initialize-file-name-history
+             ;; prevent adding files opened via minibuffer interaction
+             ;; a second time.
+	     (not (and file-name-history
+		       (recentf-string-equal
+			(recentf-expand-file-name (car file-name-history))
+			filename))))
+    (let ((m (recentf-string-member filename file-name-history)))
+      (and m (setq file-name-history (delq (car m) file-name-history)))
+      (push (recentf-shorten-file-name filename) file-name-history))))
 
 (defun recentf-apply-filename-handlers (name)
   "Apply `recentf-filename-handlers' to file NAME.

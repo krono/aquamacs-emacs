@@ -1,0 +1,50 @@
+#!/bin/sh
+# Sign the Aquamacs executable
+#
+# Only works if the AQUAMACS_CERT variable is defined, giving the
+# identity to be used.
+
+AQUAMACS_CERT=AAF180423BA3E8A2A36167F7024E9B7E774F41B3
+APPDIR="nextstep/Aquamacs.app"
+RESDIR="${APPDIR}/Contents/Resources"
+NEWBIN="${RESDIR}/bin"
+MACDIR="${APPDIR}/Contents/MacOS"
+BUILDTOOLS="aquamacs/build"
+
+# Move scripts out of the MacOS directory in the bundle, because Apple doesn't like that.
+mkdir ${NEWBIN}
+mv ${MACDIR}/bin/{aquamacs,emacs} ${NEWBIN}
+mv ${MACDIR}/libexec/rcs2log ${NEWBIN}
+ln -s ../../Resources/bin/aquamacs ${MACDIR}/bin/aquamacs
+ln -s ../../Resources/bin/emacs ${MACDIR}/bin/emacs
+ln -s ../../Resources/bin/rcs2log ${MACDIR}/libexec/rcs2log
+
+
+if [[ "${AQUAMACS_CERT}" != "" ]]; then
+    echo "Signing code with $AQUAMACS_CERT"
+    # codesign -s "$AQUAMACS_CERT" --force --timestamp \
+    #         --options=runtime ${APPDIR}
+
+    for f in "${APPDIR}"/Contents/MacOS/{bin/*,libexec/*,lib/*,Aquamacs} ${APPDIR}; do
+        codesign -s "$AQUAMACS_CERT" --force --timestamp \
+                 --options=runtime \
+                 --entitlements "${BUILDTOOLS}/entitlements.plist" \
+                 "${f}"
+    done
+else
+    echo
+    echo "No signing identity given with AQUAMACS_CERT"
+    echo
+    echo "IMPORTANT"
+    echo "When building for Mac OS X Mojave (10.14) and later, please make"
+    echo "sure you sign the executable using:"
+    echo "  codesign -s \"<certificate>\" --deep nextstep/Aquamacs.app"
+    echo "or, rerun the build with AQUAMACS_CERT=\"<certificate>\":"
+    echo "  AQUAMACS_CERT=\"My Codesign Certificate\" ./build-aquamacs"
+    echo ""
+    echo "If you don't have a certificate yet, you can create one using"
+    echo "the Keychain Access application. For more information, see:"
+    echo "(https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html)"
+fi
+
+exit 0

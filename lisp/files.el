@@ -123,13 +123,13 @@ but it is not an automatically buffer-local variable.")
 (put 'backup-inhibited 'permanent-local t)
 
 (defcustom backup-by-copying nil
- "Non-nil means always use copying to create backup files.
+  "Non-nil means always use copying to create backup files.
 See documentation of variable `make-backup-files'."
   :type 'boolean
   :group 'backup)
 
 (defcustom backup-by-copying-when-linked nil
- "Non-nil means use copying to create backups for files with multiple names.
+  "Non-nil means use copying to create backups for files with multiple names.
 This causes the alternate names to refer to the latest version as edited.
 This variable is relevant only if `backup-by-copying' is nil."
   :type 'boolean
@@ -1724,6 +1724,35 @@ use with \\[execute-extended-command]."
 	 (locale-coding-system nil))
     (rename-file encoded new-encoded ok-if-already-exists)
     newname))
+
+(defun forward-filename (arg)
+  "Move point forward arg filenames (backward if arg is negative)."
+  (interactive "p")
+  (if (< arg 0)
+      (progn
+	(backward-char)
+	(while (< arg 0)
+	  (re-search-backward "[/\n]" nil t)
+	  (setq arg (1+ arg)))
+	(forward-char))
+    (forward-char)
+    (while (> 0 arg )
+      (re-search-forward "[/\n]" nil t)
+      (setq arg (1- arg)))
+    (backward-char)))
+
+(defun kill-filename (arg)
+  "Kill characters forward until up to the end of a filename.
+With argument, do this that many times."
+  (interactive "p")
+  (kill-region (point) (progn (forward-filename arg) (point))))
+
+(defun backward-kill-filename (arg)
+  "Kill characters backward up to the beginning of a filename.
+With argument, do this that many times."
+  (interactive "p")
+  (kill-filename (- arg)))
+
 
 (defcustom confirm-nonexistent-file-or-buffer 'after-completion
   "Whether confirmation is requested before visiting a new file or buffer.
@@ -3763,6 +3792,7 @@ i  -- to ignore the local variables list, and permanently mark these
 
       ;; Display the buffer and read a choice.
       (save-window-excursion
+        (make-frame-visible (car (frame-list)))
 	(pop-to-buffer buf '(display-buffer--maybe-at-bottom))
 	(let* ((exit-chars '(?y ?n ?\s))
 	       (prompt (format "Please type %s%s: "
@@ -6078,6 +6108,17 @@ after saving the buffers."
                    (if arg
                        t
                      (setq queried t)
+                     (with-current-buffer buffer
+		       (select-window (get-window-for-other-buffer))
+		       (if (and (boundp 'tabbar-mode)
+                                tabbar-mode
+                                (fboundp 'switch-to-buffer-in-tab))
+			   (switch-to-buffer-in-tab buffer)
+			 (switch-to-buffer buffer))
+		       (select-frame-set-input-focus
+                        (window-frame (selected-window)))
+		       (if (fboundp 'smart-move-minibuffer-inside-screen)
+                           (smart-move-minibuffer-inside-screen)))
                      (if (buffer-file-name buffer)
                          (if (or
                               (equal (buffer-name buffer)
@@ -6093,14 +6134,18 @@ after saving the buffers."
                              ;; The buffer name is similar to the file
                              ;; name.
                              (format "Save file %s? "
-                                     (buffer-file-name buffer))
+                                     (if (> (length (buffer-file-name buffer)) 30)
+                                              (concat "..." (substring (buffer-file-name buffer) -27))
+                                            (buffer-file-name buffer)))
                            ;; The buffer and file names are dissimilar;
                            ;; display both.
-                           (format "Save file %s (buffer %s)? "
+                           (format "Save file %s (buffer %s)?
+The buffer contains unsaved changed which may be lost if you don't save them. "
                                    (buffer-file-name buffer)
                                    (buffer-name buffer)))
                        ;; No file name.
-                       (format "Save buffer %s? " (buffer-name buffer)))))
+                       (format "Save buffer %s? "
+                               (buffer-name buffer)))))
                  (lambda (buffer)
                    (with-current-buffer buffer
                      (save-buffer)))
@@ -7160,67 +7205,83 @@ Also rename any existing auto save file, if it was made in this session."
 	     (recent-auto-save-p))
 	(rename-file osave buffer-auto-save-file-name t))))
 
+(defvar auto-save-file-name-prefix "#" "String prepended to auto save file names.")
+(defvar auto-save-file-name-postfix "#" "String appended to auto save file names.")
+
+(defvar aquamacs-untitled-buffer-creation-time nil
+  "Creation time of an untitled buffer.
++If set, this is used to produce a unique auto save file name
+by `make-auto-save-file-name'. Set by `new-empty-buffer' in Aquamacs.")
+(make-variable-buffer-local 'aquamacs-untitled-buffer-creation-time)
+
 (defun make-auto-save-file-name ()
   "Return file name to use for auto-saves of current buffer.
 Does not consider `auto-save-visited-file-name' as that variable is checked
 before calling this function.
 See also `auto-save-file-name-p'."
-  (if buffer-file-name
-      (let ((handler (find-file-name-handler
-                      buffer-file-name 'make-auto-save-file-name)))
-	(if handler
-	    (funcall handler 'make-auto-save-file-name)
-          (files--transform-file-name
-           buffer-file-name auto-save-file-name-transforms
-                                          "#" "#")))
-    ;; Deal with buffers that don't have any associated files.  (Mail
-    ;; mode tends to create a good number of these.)
-    (let ((buffer-name (buffer-name))
-	  (limit 0)
-	  file-name)
-      ;; Restrict the characters used in the file name to those that
-      ;; are known to be safe on all filesystems, url-encoding the
-      ;; rest.
-      ;; We do this on all platforms, because even if we are not
-      ;; running on DOS/Windows, the current directory may be on a
-      ;; mounted VFAT filesystem, such as a USB memory stick.
-      (while (string-match "[^A-Za-z0-9_.~#+-]" buffer-name limit)
-	(let* ((character (aref buffer-name (match-beginning 0)))
-	       (replacement
-                ;; For multibyte characters, this will produce more than
-                ;; 2 hex digits, so is not true URL encoding.
-                (format "%%%02X" character)))
-	  (setq buffer-name (replace-match replacement t t buffer-name))
-	  (setq limit (1+ (match-end 0)))))
-      ;; Generate the file name.
-      (setq file-name
-	    (make-temp-file
-	     (let ((fname
-		    (expand-file-name
-		     (format "#%s#" buffer-name)
-		     ;; Try a few alternative directories, to get one we can
-		     ;; write it.
-		     (cond
-		      ((file-writable-p default-directory) default-directory)
-		      ((file-writable-p "/var/tmp/") "/var/tmp/")
-		      ("~/")))))
-	       (if (and (memq system-type '(ms-dos windows-nt cygwin))
-			;; Don't modify remote filenames
-			(not (file-remote-p fname)))
-		   ;; The call to convert-standard-filename is in case
-		   ;; buffer-name includes characters not allowed by the
-		   ;; DOS/Windows filesystems.  make-temp-file writes to the
-		   ;; file it creates, so we must fix the file name _before_
-		   ;; make-temp-file is called.
-		   (convert-standard-filename fname)
-		 fname))
-	     nil "#"))
-      ;; make-temp-file creates the file,
-      ;; but we don't want it to exist until we do an auto-save.
-      (condition-case ()
-	  (delete-file file-name)
-	(file-error nil))
-      file-name)))
+
+  (let ((buffer-file-name
+         (or buffer-file-name
+             (if aquamacs-untitled-buffer-creation-time
+                 (format "%suntitled-%s" default-directory
+                         aquamacs-untitled-buffer-creation-time)))))
+    (if buffer-file-name
+        (let ((handler (find-file-name-handler
+                        buffer-file-name 'make-auto-save-file-name)))
+	  (if handler
+	      (funcall handler 'make-auto-save-file-name)
+            (files--transform-file-name
+             buffer-file-name auto-save-file-name-transforms
+             auto-save-file-name-prefix
+             auto-save-file-name-postfix)))
+      ;; Deal with buffers that don't have any associated files.  (Mail
+      ;; mode tends to create a good number of these.)
+      (let ((buffer-name (buffer-name))
+	    (limit 0)
+	    file-name)
+        ;; Restrict the characters used in the file name to those that
+        ;; are known to be safe on all filesystems, url-encoding the
+        ;; rest.
+        ;; We do this on all platforms, because even if we are not
+        ;; running on DOS/Windows, the current directory may be on a
+        ;; mounted VFAT filesystem, such as a USB memory stick.
+        (while (string-match "[^A-Za-z0-9_.~#+-]" buffer-name limit)
+	  (let* ((character (aref buffer-name (match-beginning 0)))
+	         (replacement
+                  ;; For multibyte characters, this will produce more than
+                  ;; 2 hex digits, so is not true URL encoding.
+                  (format "%%%02X" character)))
+	    (setq buffer-name (replace-match replacement t t buffer-name))
+	    (setq limit (1+ (match-end 0)))))
+        ;; Generate the file name.
+        (setq file-name
+	      (make-temp-file
+	       (let ((fname
+		      (expand-file-name
+		       (format "#%s#" buffer-name)
+		       ;; Try a few alternative directories, to get one we can
+		       ;; write it.
+		       (cond
+		        ((file-writable-p default-directory) default-directory)
+		        ((file-writable-p "/var/tmp/") "/var/tmp/")
+		        ("~/")))))
+	         (if (and (memq system-type '(ms-dos windows-nt cygwin))
+			  ;; Don't modify remote filenames
+			  (not (file-remote-p fname)))
+		     ;; The call to convert-standard-filename is in case
+		     ;; buffer-name includes characters not allowed by the
+		     ;; DOS/Windows filesystems.  make-temp-file writes to the
+		     ;; file it creates, so we must fix the file name _before_
+		     ;; make-temp-file is called.
+		     (convert-standard-filename fname)
+		   fname))
+	       nil "#"))
+        ;; make-temp-file creates the file,
+        ;; but we don't want it to exist until we do an auto-save.
+        (condition-case ()
+	    (delete-file file-name)
+	  (file-error nil))
+        file-name))))
 
 (defun files--transform-file-name (filename transforms prefix suffix)
   "Transform FILENAME according to TRANSFORMS.
@@ -7884,9 +7945,9 @@ normally equivalent short `-D' option is just passed on to
 				 (shell-quote-wildcard-pattern pattern))))
 		    ;; SunOS 4.1.3, SVr4 and others need the "." to list the
 		    ;; directory if FILE is a symbolic link.
- 		    (unless full-directory-p
- 		      (setq switches
- 			    (cond
+		    (unless full-directory-p
+		      (setq switches
+			    (cond
                              ((stringp switches) (concat switches " -d"))
                              ((member "-d" switches) switches)
                              (t (append switches '("-d"))))))

@@ -278,6 +278,15 @@ ns_set_foreground_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
       error ("Unknown color");
     }
 
+  /* Aquamacs: use NSCalibratedRGBColorSpace for NS color space
+     conversion. */
+  col = [col colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
+
+  if (col == nil)
+    {
+      error ("Unknown color (cannot convert to RGB)");
+    }
+
   [col retain];
   [f->output_data.ns->foreground_color release];
   f->output_data.ns->foreground_color = col;
@@ -309,6 +318,15 @@ ns_set_background_color (struct frame *f, Lisp_Object arg, Lisp_Object oldval)
       store_frame_param (f, Qbackground_color, oldval);
       unblock_input ();
       error ("Unknown color");
+    }
+
+  /* Aquamacs: use NSCalibratedRGBColorSpace for NS color space
+     conversion. */
+  col = [col colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
+
+  if (col == nil)
+    {
+      error ("Unknown color (cannot convert to RGB)");
     }
 
   [col retain];
@@ -1678,12 +1696,35 @@ nil, it defaults to the selected frame. */)
 }
 
 DEFUN ("ns-popup-color-panel", Fns_popup_color_panel, Sns_popup_color_panel,
-       0, 1, "",
+       0, 2, "",
        doc: /* Pop up the color panel.  */)
-     (Lisp_Object frame)
+  (frame, color)
+  Lisp_Object frame, color;
 {
+  struct frame *f;
   check_window_system (NULL);
-  [NSApp orderFrontColorPanel: NSApp];
+  if (NILP (frame))
+    f = SELECTED_FRAME ();
+  else
+    {
+      CHECK_FRAME (frame);
+      f = XFRAME (frame);
+    }
+  if (!NILP (color))
+    {
+      CHECK_STRING (color);
+      NSColor *col = nil;
+      if (ns_lisp_to_color (color, &col))
+	  error ("Unknown color");
+
+      /* It's unclear whether the color panel copies the color,
+	 or requires us to retain it (probably not).
+	 As a compromise, we're retaining/autoreleasing at this time.
+	 This should not create a leak. */
+      [[NSColorPanel sharedColorPanel] setColor:[[col retain] autorelease]];
+    }
+
+ [NSApp orderFrontColorPanel: NSApp];
   return Qnil;
 }
 
@@ -1767,12 +1808,17 @@ Optional arg DIR-ONLY-P, if non-nil, means choose only directories.  */)
     dirS = [dirS stringByExpandingTildeInPath];
 
   panel = isSave ?
-    (id)[NSSavePanel savePanel] : (id)[NSOpenPanel openPanel];
+    (id)[EmacsSavePanel savePanel] : (id)[EmacsOpenPanel openPanel];
 
   [panel setTitle: promptS];
 
   [panel setAllowsOtherFileTypes: YES];
   [panel setTreatsFilePackagesAsDirectories: YES];
+
+  /* must provide - users will have a hard time switching this off otherwise */
+  [panel setCanSelectHiddenExtension:NO];
+  [panel setExtensionHidden:NO];
+
   [panel setDelegate: fileDelegate];
 
   if (! NILP (dir_only_p))
@@ -3246,6 +3292,8 @@ DEFUN ("x-show-tip", Fx_show_tip, Sx_show_tip, 1, 6, 0,
 
   CHECK_STRING (string);
   str = SSDATA (string);
+  if (strlen(str) == 0)
+   return unbind_to (count, Qnil);;
   f = decode_window_system_frame (frame);
   if (NILP (timeout))
     timeout = Vx_show_tooltip_timeout;

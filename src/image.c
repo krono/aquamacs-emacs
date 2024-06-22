@@ -332,6 +332,10 @@ XPutPixel (Emacs_Pix_Container image, int x, int y, unsigned long pixel)
 }
 #endif /* HAVE_NS */
 
+#if defined (NS_IMPL_COCOA)
+void ns_resize_truedpi_image (void *eImg, int respect_dpi, Lisp_Object scale_factor, struct image *img);
+#endif
+
 /* Code to deal with bitmaps.  Bitmaps are referenced by their bitmap
    id, which is just an int that this section returns.  Bitmaps are
    reference counted so they can be shared among frames.
@@ -2319,6 +2323,15 @@ postprocess_image (struct frame *f, struct image *img)
 	image_laplace (f, img);
       else if (EQ (conversion, Qemboss))
 	image_emboss (f, img);
+#if defined (NS_IMPL_COCOA)
+      else if (CONSP (conversion)
+	       && EQ (XCAR (conversion), Qtruedpi))
+	ns_resize_truedpi_image (img->pixmap, 1, XCDR (conversion), img);
+      else if (CONSP (conversion)
+	       && EQ (XCAR (conversion), Qscale))
+	ns_resize_truedpi_image (img->pixmap, 0, XCDR (conversion), img);
+#endif /*NS_IMPL_COCOA*/
+
       else if (CONSP (conversion)
 	       && EQ (XCAR (conversion), Qedge_detection))
 	{
@@ -12123,6 +12136,8 @@ non-numeric, there is no explicit limit on the size of images.  */);
   /* Other symbols.  */
   DEFSYM (Qlaplace, "laplace");
   DEFSYM (Qemboss, "emboss");
+  DEFSYM (Qtruedpi, "truedpi");
+  DEFSYM (Qscale, "scale");
   DEFSYM (Qedge_detection, "edge-detection");
   DEFSYM (Qheuristic, "heuristic");
 

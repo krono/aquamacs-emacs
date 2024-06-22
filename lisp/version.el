@@ -67,7 +67,15 @@ Don't use this function in programs to choose actions according
 to the system configuration; look at `system-configuration' instead."
   (interactive "P")
   (let ((version-string
-         (format "GNU Emacs %s (build %s, %s%s%s%s)%s"
+         (format "%s GNU Emacs %s (build %s, %s%s%s%s)%s rev %s"
+                 (if (boundp 'aquamacs-version)
+		     (concat
+		      "Aquamacs "
+		      (if (boundp 'aquamacs-version) aquamacs-version "?")
+		      (if (boundp 'aquamacs-minor-version)
+                          aquamacs-minor-version "?")
+		      " ")
+                    "Aquamacs/vanilla ")
                  emacs-version
                  emacs-build-number
 		 system-configuration
@@ -96,7 +104,8 @@ to the system configuration; look at `system-configuration' instead."
 					      "" "\n")
 					  " of %Y-%m-%d")
 					 emacs-build-time)
-		   ""))))
+		   "")
+                 emacs-repository-version)))
     (if here
         (insert version-string)
       (if (called-interactively-p 'interactive)

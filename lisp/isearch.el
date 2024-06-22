@@ -2805,6 +2805,8 @@ The command accepts Unicode names like \"smiling face\" or
 	    ;; If the string was found but was completely invisible,
 	    ;; it might now be partly visible, so try again.
 	    (prog1 isearch-hidden (setq isearch-hidden nil)))
+    (if (use-region-p)
+	(deactivate-mark))
     ;; In reverse search, adding stuff at
     ;; the end may cause zero or many more chars to be
     ;; matched, in the string following point.

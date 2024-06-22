@@ -34,4 +34,3 @@ switch ($a) {
     case *
 	echo other
 }
-

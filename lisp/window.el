@@ -9946,9 +9946,12 @@ buffers displaying right to left text."
 (defun kill-buffer-and-window ()
   "Kill the current buffer and delete the selected window."
   (interactive)
-  (let ((window-to-delete (selected-window))
-	(buffer-to-kill (current-buffer))
-	(delete-window-hook (lambda () (ignore-errors (delete-window)))))
+  (let* ((window-to-delete (selected-window))
+	 (buffer-to-kill (current-buffer))
+	 (delete-window-hook (lambda ()
+                               (ignore-errors
+                                 (if (eq (window-buffer) buffer-to-kill)
+				     (delete-window))))))
     (unwind-protect
 	(progn
 	  (add-hook 'kill-buffer-hook delete-window-hook t t)
@@ -9956,7 +9959,8 @@ buffers displaying right to left text."
 	      ;; If `delete-window' failed before, we rerun it to regenerate
 	      ;; the error so it can be seen in the echo area.
 	      (when (eq (selected-window) window-to-delete)
-		(delete-window))))
+		(if (eq (window-buffer) buffer-to-kill)
+		    (delete-window)))))
       ;; If the buffer is not dead for some reason (probably because
       ;; of a `quit' signal), remove the hook again.
       (ignore-errors

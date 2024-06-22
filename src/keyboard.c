@@ -5895,6 +5895,8 @@ make_lispy_event (struct input_event *event)
       /* NS_NONKEY_EVENTs are just like NON_ASCII_KEYSTROKE_EVENTs,
 	 except that they are non-key events (last-nonmenu-event is nil).  */
     case NS_NONKEY_EVENT:
+      /* special drag events */
+    case NS_MOUSEDRAG_EVENT:
 #endif
 
       /* A function key.  The symbol may need to have modifier prefixes
@@ -5940,6 +5942,30 @@ make_lispy_event (struct input_event *event)
 				    Qfunction_key, Qnil,
 				    lispy_function_keys, &func_key_syms,
 				    ARRAYELTS (lispy_function_keys));
+
+      if (event->kind == NS_MOUSEDRAG_EVENT)
+	{
+	  /* We need to use an alist rather than a vector as the cache
+	     since we can't make a vector long enough.  */
+	  if (NILP (KVAR (current_kboard, system_key_syms)))
+	      kset_system_key_syms (current_kboard, Fcons (Qnil, Qnil));
+
+            struct frame *f = XFRAME (event->frame_or_window);
+            Lisp_Object position;
+            Lisp_Object head;
+	    position = make_lispy_position (f, event->x, event->y,
+					    event->timestamp);
+	    head = modify_event_symbol (event->code,
+				        event->modifiers,
+	                                Qfunction_key,
+				        KVAR (current_kboard, Vsystem_key_alist),
+				        0, &KVAR (current_kboard, system_key_syms),
+				        (unsigned) -1);
+	    return Fcons (head,
+			  Fcons (Qnil,
+				 Fcons (position,
+					Qnil)));
+        }
 
       /* Handle system-specific or unknown keysyms.
 	 We need to use an alist rather than a vector as the cache
@@ -8422,7 +8448,10 @@ parse_menu_item (Lisp_Object item, int inmenubar)
 	if (NILP (keys))
 	  keys = Fwhere_is_internal (def, Qnil, Qt, Qnil, Qnil);
 
-	if (!NILP (keys))
+	if (!NILP (keys)
+	    && !(VECTORP (keys)
+		 && SYMBOLP (AREF (keys, 0))))
+	  /* do not show event symbols in menu */
 	  {
 	    tem = Fkey_description (keys, Qnil);
 	    if (CONSP (prefix))
@@ -9086,6 +9115,7 @@ parse_tool_bar_item (Lisp_Object key, Lisp_Object item)
   /* Set defaults.  */
   set_prop (TOOL_BAR_ITEM_KEY, key);
   set_prop (TOOL_BAR_ITEM_ENABLED_P, Qt);
+  set_prop (TOOL_BAR_ITEM_VISIBLE_P, Qt);
 
   /* Get the caption of the item.  If the caption is not a string,
      evaluate it to get a string.  If we don't get a string, skip this
@@ -9149,10 +9179,14 @@ parse_tool_bar_item (Lisp_Object key, Lisp_Object item)
 	}
       else if (EQ (ikey, QCvisible))
 	{
-	  /* `:visible FORM'.  If got a visible property and that
-	     evaluates to nil then ignore this item.  */
+#ifdef HAVE_NS
+	  /* at least in NS we need all items so users
+	     can configure the toolbar. */
+	    set_prop (TOOL_BAR_ITEM_VISIBLE_P, menu_item_eval_property (value));
+#else
 	  if (NILP (menu_item_eval_property (value)))
 	    return 0;
+#endif
 	}
       else if (EQ (ikey, QChelp))
         /* `:help HELP-STRING'.  */

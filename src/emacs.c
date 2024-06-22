@@ -2345,6 +2345,7 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
       syms_of_nsmenu ();
       syms_of_nsselect ();
       syms_of_fontset ();
+      syms_of_nsaquamacs ();
 #endif /* HAVE_NS */
 
 #ifdef HAVE_PGTK

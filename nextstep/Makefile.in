@@ -50,7 +50,7 @@ ifeq ($(DUMPING),pdumper)
 ns_pdmp_target = ${ns_applibexecdir}/Emacs.pdmp
 endif
 
-all: ${ns_appdir} ${ns_appbindir}/Emacs ${ns_pdmp_target}
+all: ${ns_appdir} ${ns_appbindir}/Aquamacs ${ns_applibexecdir}/Aquamacs.pdmp
 
 ${ns_check_file}: ${ns_appdir}
 
@@ -67,13 +67,13 @@ ${ns_appdir}: ${srcdir}/${ns_appsrc} ${ns_appsrc}
 ## Don't create ns_appbindir via an order-only prerequisite, because
 ## on GNUstep ns_appbindir and ns_bindir are the same, so
 ## the rule for ns_appbindir would conflict with that for ns_appdir.
-${ns_appbindir}/Emacs: ${ns_appdir} ${ns_check_file} ../src/emacs${EXEEXT}
+${ns_appbindir}/Aquamacs: ${ns_appdir} ${ns_check_file} ../src/emacs${EXEEXT}
 	${MKDIR_P} ${ns_appbindir}
 	cp -f ../src/emacs${EXEEXT} $@
 
 # FIXME: Don't install the dump file into the app bundle when
 # self-contained install is disabled.
-${ns_applibexecdir}/Emacs.pdmp: ${ns_appdir} ${ns_check_file} ../src/emacs${EXEEXT}.pdmp
+${ns_applibexecdir}/Aquamacs.pdmp: ${ns_appdir} ${ns_check_file} ../src/emacs${EXEEXT}.pdmp
 	${MKDIR_P} ${ns_applibexecdir}
 	cp -f ../src/emacs${EXEEXT}.pdmp $@
 

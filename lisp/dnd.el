@@ -247,7 +247,10 @@ An alternative for systems that do not support unc file names is
 	(progn
 	  (if dnd-open-file-other-window
 	      (find-file-other-window f)
-	    (find-file f))
+            ;; When OBOF is on, open file in new frame unless already
+            ;; displayed in current space
+            (let ((obof-force-current-space one-buffer-one-frame-mode))
+              (find-file f)))
           (file-name-history--add f)
 	  'private)
       (error "Can not read %s" uri))))
@@ -262,7 +265,9 @@ URI is the url for the file.  ACTION is ignored."
     (or url-handler-mode (url-handler-mode))
     (if dnd-open-file-other-window
 	(find-file-other-window uri)
-      (find-file uri))
+      ;; when OBOF is on, open file in new frame unless already displayed in current space
+      (let ((obof-force-current-space one-buffer-one-frame-mode))
+	(find-file uri)))
     'private))
 
 
