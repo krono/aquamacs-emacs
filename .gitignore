@@ -41,6 +41,7 @@ makefile
 !test/manual/etags/Makefile
 !test/manual/etags/make-src/Makefile
 !test/manual/indent/Makefile
+!aquamacs/doc/latex/Makefile
 /*.cache
 /confdefs.h
 /config.status
@@ -200,6 +201,7 @@ nextstep/Cocoa/Emacs.base/Contents/Resources/English.lproj
 nextstep/Emacs.app/
 nextstep/GNUstep/Emacs.base/Resources/Emacs.desktop
 nextstep/GNUstep/Emacs.base/Resources/Info-gnustep.plist
+nextstep/Aquamacs.app/
 src/bootstrap-emacs
 src/emacs
 src/emacs-[0-9]*
@@ -266,6 +268,7 @@ etc/DOC
 etc/refcards/emacsver.tex
 gnustmp*
 /info/
+aquamacs/doc/latex/*.out
 
 # Version control and locks.
 *.orig
@@ -313,3 +316,20 @@ lib-src/seccomp-filter.bpf
 lib-src/seccomp-filter.pfc
 lib-src/seccomp-filter-exec.bpf
 lib-src/seccomp-filter-exec.pfc
+
+# Output of documentation build
+/aquamacs/doc/Aquamacs Help/Aquamacs Help.helpindex
+/aquamacs/doc/Aquamacs Help/*.html
+/aquamacs/doc/Aquamacs Help/*.svg
+/aquamacs/doc/Aquamacs Help/*.pl
+/aquamacs/doc/latex/Aquamacs Manual.pdf
+/aquamacs/doc/latex/changelog.html
+/aquamacs/doc/latex/changes.pdf
+/aquamacs/doc/latex/Aquamacs Manual.pdf
+/aquamacs/doc/latex/changelog.html
+/aquamacs/doc/latex/changes.pdf
+
+# Aquamacs (or at least Mac) specific
+.auctex-auto
+.DS_Store
+.gdb_history

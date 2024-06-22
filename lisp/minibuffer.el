@@ -1858,7 +1858,9 @@ Runs of equal candidate strings are eliminated.  GROUP-FUN is a
 				      (string-width s)))
 				  strings)))
 	   (window (get-buffer-window (current-buffer) 0))
-	   (wwidth (if window (1- (window-width window)) 79))
+	   (wwidth (if (and window (not face-remapping-alist))
+		       (1- (window-width window))
+		     45))   ;; hardcoded 45 in Aquamacs until we have a `window-buffer-width' function
 	   (columns (min
 		     ;; At least 2 columns; at least 2 spaces between columns.
 		     (max 2 (/ wwidth (+ 2 length)))
@@ -2681,6 +2683,9 @@ The completion method is determined by `completion-at-point-functions'."
   "Local keymap for minibuffer input with completion for filenames.
 Gets combined either with `minibuffer-local-completion-map' or
 with `minibuffer-local-must-match-map'.")
+
+(define-key minibuffer-local-filename-completion-map
+            [remap backward-kill-word] 'backward-kill-filename)
 
 (defvar minibuffer-local-filename-must-match-map (make-sparse-keymap))
 (make-obsolete-variable 'minibuffer-local-filename-must-match-map nil "24.1")

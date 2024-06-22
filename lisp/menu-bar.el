@@ -338,6 +338,10 @@
       '(menu-item "Search Tagged Files..." tags-search
                   :help "Search for a regexp in all tagged files"))
     (bindings--define-key menu [separator-tag-search] menu-bar-separator)
+    (bindings--define-key menu [grep]
+      `(menu-item "Search Files (Grep)..." grep
+                  :help "Search files for strings or regexps (with Grep)"))
+    (bindings--define-key menu [separator-grep-search] menu-bar-separator)
 
     (bindings--define-key menu [repeat-search-back]
       '(menu-item "Repeat Backwards"
@@ -580,16 +584,18 @@
 If the optional argument REGION is non-nil, the function ignores
 BEG and END, and saves the current region instead."
   (interactive "r\np")
-  (let ((select-enable-clipboard t))
-    (kill-ring-save beg end region)))
+  (and (or (not transient-mark-mode) (use-region-p)) ;; Aquamacs restriction
+       (let ((select-enable-clipboard t))
+         (kill-ring-save beg end region))))
 
 (defun clipboard-kill-region (beg end &optional region)
   "Kill the region, and save it in the GUI's clipboard.
 If the optional argument REGION is non-nil, the function ignores
 BEG and END, and kills the current region instead."
   (interactive "r\np")
-  (let ((select-enable-clipboard t))
-    (kill-region beg end region)))
+  (and (or (not transient-mark-mode) (use-region-p)) ;; Aquamacs restriction
+       (let ((select-enable-clipboard t))
+         (kill-region beg end region))))
 
 (defun menu-bar-enable-clipboard ()
   "Make CUT, PASTE and COPY (keys and menu bar items) use the clipboard.
@@ -907,6 +913,15 @@ The selected font will be the default on both the existing and future frames."
   "Do not display any buffer boundary indicators."
   (interactive)
   (customize-set-variable 'indicate-buffer-boundaries nil))
+
+(defun customize-tool-bar ()
+  "Show tool bar customization.
+Only available in Aquamacs."
+  (interactive)
+  (tool-bar-mode 1)  ; must be visible
+  (sit-for 0)
+  (ns-tool-bar-customize))
+
 
 (defvar menu-bar-showhide-fringe-ind-menu
   (let ((menu (make-sparse-keymap "Buffer boundaries")))
@@ -1246,6 +1261,33 @@ The selected font will be the default on both the existing and future frames."
 (defvar menu-bar-showhide-menu
   (let ((menu (make-sparse-keymap "Show/Hide")))
 
+    (bindings--define-key menu [ns-tool-bar]
+      `(menu-item "Customize toolbar..."
+                  customize-tool-bar
+                  :help "Display the Toolbar customization panel"
+                  :visible (and ,(fboundp 'ns-tool-bar-customize)
+                                (display-graphic-p))))
+
+    (bindings--define-key menu [newlines-separator] menu-bar-separator)
+
+    ;; Aquamacs: show/hide option for paren matching
+    (bindings--define-key menu [highlight-paren-mode]
+      (menu-bar-make-mm-toggle show-paren-mode
+                               "Paren Match Highlighting"
+                               "Highlight matching/mismatched parentheses at cursor (Show Paren mode)"))
+
+    ;; Aquamacs: Highlight current line
+    (bindings--define-key menu [hl-line-mode]
+      (menu-bar-make-mm-toggle global-hl-line-mode
+                               "Line Highlighting"
+                               "Highlight current line (hl-line-mode)"))
+
+    ;; Aquamacs: Show or hide hard newlines.
+    (bindings--define-key menu [show-newlines-mode]
+      (menu-bar-make-mm-toggle global-show-newlines-mode
+                               "Show Newlines"
+                               "Show hard newlines"))
+
     (bindings--define-key menu [display-line-numbers]
       `(menu-item "Line Numbers for All Lines"
 		  ,menu-bar-showhide-line-numbers-menu))
@@ -1305,9 +1347,10 @@ mail status in mode line"))
       `(menu-item "Fringe" ,menu-bar-showhide-fringe-menu
                   :visible (display-graphic-p)))
 
-    (bindings--define-key menu [showhide-scroll-bar]
-      `(menu-item "Scroll Bar" ,menu-bar-showhide-scroll-bar-menu
-                  :visible (display-graphic-p)))
+    ;; Aquamacs: don't show scroll bar options
+    ;; (bindings--define-key menu [showhide-scroll-bar]
+    ;; `(menu-item "Scroll Bar" ,menu-bar-showhide-scroll-bar-menu
+    ;;              :visible (display-graphic-p)))
 
     (bindings--define-key menu [showhide-tooltip-mode]
       '(menu-item "Tooltips" tooltip-mode
@@ -1328,14 +1371,13 @@ mail status in mode line"))
                               (frame-parameter (menu-bar-frame-for-menubar)
                                                'menu-bar-lines)))))
 
-    (unless (featurep 'ns)
-      (bindings--define-key menu [showhide-tab-bar]
-        '(menu-item "Tab Bar" toggle-tab-bar-mode-from-frame
-                    :help "Turn tab bar on/off"
-                    :button
-                    (:toggle . (menu-bar-positive-p
-                                (frame-parameter (menu-bar-frame-for-menubar)
-                                                 'tab-bar-lines))))))
+    (bindings--define-key menu [showhide-tab-bar]
+      '(menu-item "Tab Bar" toggle-tab-bar-mode-from-frame
+                  :help "Turn tab bar on/off"
+                  :button
+                  (:toggle . (menu-bar-positive-p
+                              (frame-parameter (menu-bar-frame-for-menubar)
+                                               'tab-bar-lines)))))
 
     (if (and (boundp 'menu-bar-showhide-tool-bar-menu)
              (keymapp menu-bar-showhide-tool-bar-menu))
@@ -1374,8 +1416,34 @@ mail status in mode line"))
   (setq word-wrap nil)
   (if truncate-lines (toggle-truncate-lines -1)))
 
+
 (defvar menu-bar-line-wrapping-menu
   (let ((menu (make-sparse-keymap "Line Wrapping")))
+
+    ;; Aquamacs: automatically use hard or soft word wrap
+    (bindings--define-key menu [auto-wrap]
+      '(menu-item "Auto-Detect Line Wrap in Text Files"
+                  toggle-text-mode-auto-detect-wrap
+                  :help "Automatically use hard or soft word wrap (Auto Fill / Longlines) in text modes."
+                  :button (:toggle . (if (listp text-mode-hook)
+                                         (or (member 'auto-detect-wrap text-mode-hook)
+                                             (member 'auto-detect-longlines text-mode-hook))
+                                       (or (eq 'auto-detect-wrap text-mode-hook)
+                                           (eq 'auto-detect-longlines text-mode-hook))))))
+
+    ;; Aquamacs: Command to save word wrapping settings as default
+    (bindings--define-key menu [wrapping-set-default]
+      `(menu-item (if (menu-bar-local-wrapping-p)
+                      "Adopt as Default"
+                    "Adopted as Default")
+                  menu-bar-set-wrapping-default
+                  :help "Set current wrapping style as default for other buffers."
+                  :enable (and (menu-bar-menu-frame-live-and-visible-p)
+                               (menu-bar-local-wrapping-p))
+                  :button (:toggle . (not (menu-bar-local-wrapping-p)))))
+
+    (bindings--define-key menu [aq-wrapping-separator]
+      menu-bar-separator)
 
     (bindings--define-key menu [word-wrap]
       '(menu-item "Word Wrap (Visual Line mode)"
@@ -1461,7 +1529,7 @@ mail status in mode line"))
 
     (bindings--define-key menu [package]
       '(menu-item "Manage Emacs Packages" package-list-packages
-        :help "Install or uninstall additional Emacs packages"))
+                  :help "Install or uninstall additional Emacs packages"))
 
     (bindings--define-key menu [save]
       '(menu-item "Save Options" menu-bar-options-save
@@ -1559,23 +1627,26 @@ mail status in mode line"))
 	     (if (not uniquify-buffer-name-style)
 		 'post-forward-angle-brackets))))
 
-    (bindings--define-key menu [edit-options-separator]
-      menu-bar-separator)
-    (bindings--define-key menu [cua-mode]
-      (menu-bar-make-mm-toggle
-       cua-mode
-       "Cut/Paste with C-x/C-c/C-v (CUA Mode)"
-       "Use C-z/C-x/C-c/C-v keys for undo/cut/copy/paste"
-       (:visible (or (not (boundp 'cua-enable-cua-keys))
-		     cua-enable-cua-keys))))
+    (unless (boundp 'aquamacs-version)
+      ;; Aquamacs: CUA menu items not enabled because CUA is set as
+      ;; standard.
+      (bindings--define-key menu [edit-options-separator]
+        menu-bar-separator)
+      (bindings--define-key menu [cua-mode]
+        (menu-bar-make-mm-toggle
+         cua-mode
+         "Cut/Paste with C-x/C-c/C-v (CUA Mode)"
+         "Use C-z/C-x/C-c/C-v keys for undo/cut/copy/paste"
+         (:visible (or (not (boundp 'cua-enable-cua-keys))
+		       cua-enable-cua-keys))))
 
-    (bindings--define-key menu [cua-emulation-mode]
-      (menu-bar-make-mm-toggle
-       cua-mode
-       "CUA Mode (without C-x/C-c/C-v)"
-       "Enable CUA Mode without rebinding C-x/C-c/C-v keys"
-       (:visible (and (boundp 'cua-enable-cua-keys)
-		      (not cua-enable-cua-keys)))))
+      (bindings--define-key menu [cua-emulation-mode]
+        (menu-bar-make-mm-toggle
+         cua-mode
+         "CUA Mode (without C-x/C-c/C-v)"
+         "Enable CUA Mode without rebinding C-x/C-c/C-v keys"
+         (:visible (and (boundp 'cua-enable-cua-keys)
+		        (not cua-enable-cua-keys))))))
 
     (bindings--define-key menu [search-options]
       `(menu-item "Default Search Options"
@@ -1601,6 +1672,77 @@ mail status in mode line"))
        (:enable (not cua-mode))))
     menu))
 
+;; Aquamacs: Begin line-wrap menu additions
+
+;; could add something to minor-mode-alist as a lighter for the
+;; mode-line
+
+(setq minor-mode-alist (cons (list 'truncate-lines " Trunc")
+                             minor-mode-alist))
+
+(defun menu-bar-set-wrapping-default ()
+  "Set current buffer's line wrapping style as default."
+  (interactive)
+
+  (let ((variables '(word-wrap truncate-lines line-move-visual
+                               visual-line-mode auto-fill-function
+                               fringe-indicator-alist)))
+
+    (let ((vlf (member (cons 'continuation visual-line-fringe-indicators)
+                       fringe-indicator-alist)))
+      
+      (unless (eq (if vlf t nil)
+                  (if (member (cons 'continuation visual-line-fringe-indicators)
+                              (default-value 'fringe-indicator-alist)) t nil))
+        (if vlf
+            (set-default 'fringe-indicator-alist
+                         (cons (cons 'continuation visual-line-fringe-indicators)
+                               (default-value 'fringe-indicator-alist)))
+          (set-default 'fringe-indicator-alist
+                       (remove (cons 'continuation visual-line-fringe-indicators)
+                               (default-value 'fringe-indicator-alist))))))
+    
+    ;; create local bindings in all buffers
+    ;; in order to just set the default for future buffers
+    ;; WE DON'T NEED THIS IF USERS CALL THIS FUNCTION EXPLICITLY
+    ;; (dolist (buf (buffer-list))
+    ;;   (when (buffer-live-p buf)
+    ;;  (with-current-buffer buf
+    ;;    (unless (eq major-mode 'fundamental-mode)
+    ;;      (dolist (v variables)
+    ;;        ;; create local binding
+    ;;        (set v (symbol-value v)))))))
+
+    ;; set default values and remove local bindings in current buffer
+    (dolist (v variables)
+      (set-default v (symbol-value v))
+      (kill-local-variable v))
+
+    (customize-mark-as-set 'word-wrap)
+    (customize-mark-as-set 'truncate-lines)
+    (customize-mark-as-set 'fringe-indicator-alist)
+    (customize-mark-as-set 'auto-fill-function)
+
+    (message "Line wrapping set as default for other buffers.")))
+
+
+;; We just offer the auto-wrap option in Aquamacs
+;; (bindings--define-key menu-bar-line-wrapping-menu [auto-fill-text-mode]
+;;   `(menu-item ,(purecopy "Hard Word Wrap as Default in Text Modes")
+;;               menu-bar-text-mode-auto-fill
+;;            :help ,(purecopy "Automatically fill text while typing (Auto Fill mode)")
+;;               :button (:toggle . (if (listp text-mode-hook)
+;;                                   (member 'turn-on-auto-fill text-mode-hook)
+;;                                 (eq 'turn-on-auto-fill text-mode-hook)))))
+(defun menu-bar-local-wrapping-p ()
+  (or (local-variable-p 'word-wrap)
+      (local-variable-p 'truncate-lines)
+      (local-variable-p 'auto-fill-function)))
+
+;; Aquamacs: End line-wrap menu additions
+
+(bindings--define-key menu-bar-options-menu [line-wrapping]
+  `(menu-item "Line Wrapping" ,menu-bar-line-wrapping-menu))
 
 ;; The "Tools" menu items
 
@@ -2048,9 +2190,6 @@ key, a click, or a menu-item"))
       `(menu-item "Search Documentation" ,menu-bar-search-documentation-menu))
     (bindings--define-key menu [sep1]
       menu-bar-separator)
-    (bindings--define-key menu [emacs-psychotherapist]
-      '(menu-item "Emacs Psychotherapist" doctor
-                  :help "Our doctor will help you feel better"))
     (bindings--define-key menu [send-emacs-bug-report]
       '(menu-item "Send Bug Report..." report-emacs-bug
                   :help "Send e-mail to Emacs maintainers"))
@@ -2309,46 +2448,50 @@ It must accept a buffer as its only required argument.")
   "If user discards the Buffers item, play along."
   (and (lookup-key (current-global-map) [menu-bar buffer])
        (or force (frame-or-buffer-changed-p))
-       (let ((buffers (buffer-list))
-	     (frames (frame-list))
-	     buffers-menu)
 
-	 ;; Make the menu of buffers proper.
-	 (setq buffers-menu
+       ;; relatively stable.
+       (let ((buffers (sort (buffer-list)
+                            (lambda (a b) (string< (buffer-name a)
+                                              (buffer-name b)))))
+             (frames (frame-list))
+             buffers-menu)
+
+         ;; Make the menu of buffers proper.
+         (setq buffers-menu
                (let ((i 0)
-		     (limit (and (integerp buffers-menu-max-size)
-				 (> buffers-menu-max-size 1)
-				 buffers-menu-max-size))
+	             (limit (and (integerp buffers-menu-max-size)
+			         (> buffers-menu-max-size 1)
+			         buffers-menu-max-size))
                      alist)
-		 ;; Put into each element of buffer-list
-		 ;; the name for actual display,
-		 ;; perhaps truncated in the middle.
+	         ;; Put into each element of buffer-list
+	         ;; the name for actual display,
+	         ;; perhaps truncated in the middle.
                  (while buffers
                    (let* ((buf (pop buffers))
                           (name (buffer-name buf)))
                      (unless (eq ?\s (aref name 0))
                        (push (menu-bar-update-buffers-1
                               (cons buf
-				    (if (and (integerp buffers-menu-buffer-name-length)
-					     (> (length name) buffers-menu-buffer-name-length))
-					(concat
-					 (substring
-					  name 0 (/ buffers-menu-buffer-name-length 2))
-					 "..."
-					 (substring
-					  name (- (/ buffers-menu-buffer-name-length 2))))
-				      name)
+			            (if (and (integerp buffers-menu-buffer-name-length)
+				             (> (length name) buffers-menu-buffer-name-length))
+			                (concat
+				         (substring
+				          name 0 (/ buffers-menu-buffer-name-length 2))
+				         "..."
+				         (substring
+				          name (- (/ buffers-menu-buffer-name-length 2))))
+			              name)
                                     ))
                              alist)
                        ;; If requested, list only the N most recently
                        ;; selected buffers.
                        (when (eql limit (setq i (1+ i)))
                          (setq buffers nil)))))
-		 (list (menu-bar-buffer-vector alist))))
+	         (list (menu-bar-buffer-vector alist))))
 
-	 ;; Make a Frames menu if we have more than one frame.
-	 (when (cdr frames)
-	   (let* ((frames-vec (make-vector (length frames) nil))
+         ;; Make a Frames menu if we have more than one frame.
+         (when (cdr frames)
+           (let* ((frames-vec (make-vector (length frames) nil))
                   (frames-menu
                    (cons 'keymap
                          (list "Select Frame" frames-vec)))
@@ -2360,48 +2503,48 @@ It must accept a buffer as its only required argument.")
                       (lambda ()
                         (interactive) (menu-bar-select-frame frame))))
                (setq i (1+ i)))
-	     ;; Put it after the normal buffers
-	     (setq buffers-menu
-		   (nconc buffers-menu
-			  `((frames-separator "--")
-			    (frames menu-item "Frames" ,frames-menu))))))
+             ;; Put it after the normal buffers
+             (setq buffers-menu
+	           (nconc buffers-menu
+		          `((frames-separator "--")
+		            (frames menu-item "Frames" ,frames-menu))))))
 
-	 ;; Add in some normal commands at the end of the menu.  We use
-	 ;; the copy cached in `menu-bar-buffers-menu-command-entries'
-	 ;; if it's been set already.  Note that we can't use constant
-	 ;; lists for the menu-entries, because the low-level menu-code
-	 ;; modifies them.
-	 (unless menu-bar-buffers-menu-command-entries
-	   (setq menu-bar-buffers-menu-command-entries
-		 (list '(command-separator "--")
-		       (list 'next-buffer
-			     'menu-item
-			     "Next Buffer"
-			     'next-buffer
-			     :help "Switch to the \"next\" buffer in a cyclic order")
-		       (list 'previous-buffer
-			     'menu-item
-			     "Previous Buffer"
-			     'previous-buffer
-			     :help "Switch to the \"previous\" buffer in a cyclic order")
-		       (list 'select-named-buffer
-			     'menu-item
-			     "Select Named Buffer..."
-			     'switch-to-buffer
-			     :help "Prompt for a buffer name, and select that buffer in the current window")
-		       (list 'list-all-buffers
-			     'menu-item
-			     "List All Buffers"
-			     'list-buffers
-			     :help "Pop up a window listing all Emacs buffers"
-			     ))))
-	 (setq buffers-menu
-	       (nconc buffers-menu menu-bar-buffers-menu-command-entries))
+         ;; Add in some normal commands at the end of the menu.  We use
+         ;; the copy cached in `menu-bar-buffers-menu-command-entries'
+         ;; if it's been set already.  Note that we can't use constant
+         ;; lists for the menu-entries, because the low-level menu-code
+         ;; modifies them.
+         (unless menu-bar-buffers-menu-command-entries
+           (setq menu-bar-buffers-menu-command-entries
+	         (list '(command-separator "--")
+	               (list 'next-buffer
+		             'menu-item
+		             "Next Buffer"
+		             'next-buffer
+		             :help "Switch to the \"next\" buffer in a cyclic order")
+	               (list 'previous-buffer
+		             'menu-item
+		             "Previous Buffer"
+		             'previous-buffer
+		             :help "Switch to the \"previous\" buffer in a cyclic order")
+	               (list 'select-named-buffer
+		             'menu-item
+		             "Select Named Buffer..."
+		             'switch-to-buffer
+		             :help "Prompt for a buffer name, and select that buffer in the current window")
+	               (list 'list-all-buffers
+		             'menu-item
+		             "List All Buffers"
+		             'list-buffers
+		             :help "Pop up a window listing all Emacs buffers"
+		             ))))
+         (setq buffers-menu
+               (nconc buffers-menu menu-bar-buffers-menu-command-entries))
 
          ;; We used to "(define-key (current-global-map) [menu-bar buffer]"
          ;; but that did not do the right thing when the [menu-bar buffer]
          ;; entry above had been moved (e.g. to a parent keymap).
-	 (setcdr global-buffers-menu-map (cons "Buffers" buffers-menu)))))
+         (setcdr global-buffers-menu-map (cons "Buffers" buffers-menu)))))
 
 (add-hook 'menu-bar-update-hook 'menu-bar-update-buffers)
 
@@ -2416,12 +2559,12 @@ It must accept a buffer as its only required argument.")
 ;;    (with-current-buffer buffer
 ;;     (let ((size (buffer-size)))
 ;;       (format "%s%s %-19s %6s %-15s %s"
-;;	       (if (buffer-modified-p) "*" " ")
-;;	       (if buffer-read-only "%" " ")
-;;	       (buffer-name)
-;;	       size
-;;	       mode-name
-;;	       (or (buffer-file-name) ""))))))
+;;             (if (buffer-modified-p) "*" " ")
+;;             (if buffer-read-only "%" " ")
+;;             (buffer-name)
+;;             size
+;;             mode-name
+;;             (or (buffer-file-name) ""))))))
 
 ;;; Set up a menu bar menu for the minibuffer.
 

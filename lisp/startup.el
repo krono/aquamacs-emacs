@@ -65,6 +65,12 @@ string or function value that this variable has."
 (defvaralias 'inhibit-splash-screen 'inhibit-startup-screen)
 (defvaralias 'inhibit-startup-message 'inhibit-startup-screen)
 
+(defcustom show-scratch-buffer-on-startup t
+  "Show the initial frame if it contains the *scratch* buffer on startup.
+If nil, the initial frame remains hidden if the current buffer is *scratch*."
+  :type 'boolean
+  :group 'initialization)
+
 (defcustom inhibit-startup-screen nil
   "Non-nil inhibits the startup screen.
 
@@ -500,10 +506,12 @@ DIRS are relative."
 ;; USER-NAME is nil or "", use the current user.  Prefer the XDG
 ;; location only if the .emacs.d location does not exist.
 (defun startup--xdg-or-homedot (xdg-dir user-name)
-  (let ((emacs-d-dir (concat "~" user-name
-                             (if (eq system-type 'ms-dos)
-                                 "/_emacs.d/"
-                               "/.emacs.d/"))))
+  (let ((emacs-d-dir (if (fboundp 'aquamacs-load-preferences)
+                         aquamacs-preferences-directory
+                       (concat "~" user-name
+                              (if (eq system-type 'ms-dos)
+                                  "/_emacs.d/"
+                                "/.emacs.d/")))))
     (cond
      ((or (file-exists-p emacs-d-dir)
           (if (eq system-type 'windows-nt)
@@ -766,13 +774,25 @@ It is the default value of the variable `top-level'."
 	  ;; Modify the initial frame based on what .emacs puts into
 	  ;; ...-frame-alist.
 	  (if (fboundp 'frame-notice-user-settings)
-	      (frame-notice-user-settings))
+              ;; Errors in frame settings should not prevent
+              ;; us from opening frames.
+              (condition-case err
+                  (frame-notice-user-settings)
+                (error (message "error in frame-notice-user-settings: %s"
+                                (error-message-string err)))))
 	  ;; Set the faces for the initial background mode even if
 	  ;; frame-notice-user-settings didn't (such as on a tty).
 	  ;; frame-set-background-mode is idempotent, so it won't
 	  ;; cause any harm if it's already been done.
 	  (if (fboundp 'frame-set-background-mode)
-	      (frame-set-background-mode (selected-frame))))
+	      (frame-set-background-mode (selected-frame)))
+
+	  ;; time to make the frame visible (Aquamacs)
+	  (unless (and (eq initial-window-system 'ns)
+		       (ns-application-hidden-p))
+	    (if (or show-scratch-buffer-on-startup
+		    (not (equal (buffer-name (current-buffer)) "*scratch*")))
+		(make-frame-visible))))
 
 	;; Now we know the user's default font, so add it to the menu.
 	(if (fboundp 'font-menu-add-default)
@@ -1329,6 +1349,9 @@ please check its value")
 
   (run-hooks 'before-init-hook)
 
+  (let ((initial-frame-alist (append (unless init-file-debug '((visibility . nil)))
+				      initial-frame-alist)))
+
   ;; Under X, create the X frame and delete the terminal frame.
   (unless (daemonp)
     (if (or noninteractive emacs-basic-display)
@@ -1337,15 +1360,41 @@ please check its value")
 	      tool-bar-mode nil))
     (frame-initialize))
 
-  (when (fboundp 'x-create-frame)
-    ;; Set up the tool-bar (even in tty frames, since Emacs might open a
-    ;; graphical frame later).
-    (unless noninteractive
-      (tool-bar-setup)))
+    ;; allow frame-notice-user-settings to override
+    (setq frame-initial-geometry-arguments
+	  (delete '(visibility . nil) ;
+		  frame-initial-geometry-arguments)))
+
 
   (unless noninteractive
     (startup--setup-quote-display)
     (setq internal--text-quoting-flag t))
+
+  ;; In Aquamacs, images are loaded when setting up tool-bar
+  ;; which requires image-load-path to be defined, which is a
+  ;; custom variable with delayed initialization.
+  ;; (let ((image-load-path (list (car image-load-path))) ;; speed gain?
+  ;; 	(tool-bar-load-png-only t)) ;; Aquamacs only (speed gain)
+  ;;   (unless (or noninteractive (not (fboundp 'tool-bar-mode)))
+  ;;     ;; Set up the tool-bar.  Do this even in tty frames, so that there
+  ;;     ;; is a tool-bar if Emacs later opens a graphical frame.
+  ;;     (if (or emacs-basic-display
+  ;; 	      (and (numberp (frame-parameter nil 'tool-bar-lines))
+  ;; 		   (<= (frame-parameter nil 'tool-bar-lines) 0)))
+  ;; 	  ;; On a graphical display with the toolbar disabled via X
+  ;; 	  ;; resources, set up the toolbar without enabling it.
+  ;; 	  (tool-bar-setup)
+  ;; 	;; Otherwise, enable tool-bar-mode.
+  ;; 	(tool-bar-mode 1))))
+
+  ;; do this after custom-reevaluate-setting so that image-load-path is available.
+  (when (fboundp 'x-create-frame)
+    ;; Set up the tool-bar (even in tty frames, since Emacs might open a
+    ;; graphical frame later).
+    (unless noninteractive
+      (let (;; (image-load-path (list (car image-load-path))) ;; speed gain?
+	    (tool-bar-load-png-only t)) ;; Aquamacs only (speed gain)
+	(tool-bar-setup))))
 
   (normal-erase-is-backspace-setup-frame)
 
@@ -1404,6 +1453,10 @@ please check its value")
         "init.el"
         startup-init-directory))
      t)
+
+    ;; Load Aquamacs preferences file
+    (when (fboundp 'aquamacs-load-preferences)
+      (aquamacs-load-preferences))
 
     (when (and deactivate-mark transient-mark-mode)
       (with-current-buffer (window-buffer)
@@ -1632,33 +1685,47 @@ Each element in the list should be a list of strings or pairs
 (defconst fancy-about-text
   `((:face (variable-pitch font-lock-comment-face)
      "This is "
+     :link ("Aquamacs Emacs"
+            ,(lambda (_button) (browse-url "https://aquamacs.org/"))
+            "Browse https://aquamacs.org/")
+     ", based on"
      :link ("GNU Emacs"
 	    ,(lambda (_button) (browse-url "https://www.gnu.org/software/emacs/"))
-	    "Browse https://www.gnu.org/software/emacs/")
-     ", one component of the "
+	          "Browse https://www.gnu.org/software/emacs/")
+     ",\n one component of the "
      :link
      ,(lambda ()
-       (if (eq system-type 'gnu/linux)
-	   `("GNU/Linux"
-	     ,(lambda (_button)
-                (browse-url "https://www.gnu.org/gnu/linux-and-gnu.html"))
-	     "Browse https://www.gnu.org/gnu/linux-and-gnu.html")
-	 `("GNU" ,(lambda (_button) (describe-gnu-project))
-	   "Display info on the GNU project.")))
-     " operating system.\n"
-     :face (variable-pitch font-lock-builtin-face)
+        (if (eq system-type 'gnu/linux)
+	    `("GNU/Linux"
+	      ,(lambda (_button)
+                 (browse-url "https://www.gnu.org/gnu/linux-and-gnu.html"))
+	      "Browse https://www.gnu.org/gnu/linux-and-gnu.html")
+	  `("GNU" ,(lambda (_button) (describe-gnu-project))
+	    "Display info on the GNU project.")))
+     " operating system.\n\n"
+     :face ,(lambda ()
+	      (list 'variable-pitch
+		    (list :foreground
+			  (if (eq (frame-parameter nil 'background-mode) 'dark)
+			      "cyan" "darkblue"))))
+     :face variable-pitch
+     "Aquamacs is a distribution of GNU Emacs that is adapted for Mac users.\n"
      "\n"
      ,(lambda () (emacs-version))
      "\n"
-     :face (variable-pitch (:height 0.8))
+     :face variable-pitch
      ,(lambda () emacs-copyright)
      "\n\n"
      :face variable-pitch
      :link ("Authors"
 	    ,(lambda (_button)
-	      (view-file (expand-file-name "AUTHORS" data-directory))
-	      (goto-char (point-min))))
+	       (view-file (expand-file-name "AUTHORS" data-directory))
+	       (goto-char (point-min))))
      "\tMany people have contributed code included in GNU Emacs\n"
+     :link ("Contributing to Aquamacs"
+	    ,(lambda (button) (browse-url "http://aquamacs.org/development.shtml")))
+     "\tHow to contribute improvements to Aquamacs\n"
+     "\n"
      :link ("Contributing"
 	    ,(lambda (_button) (info "(emacs)Contributing")))
      "\tHow to report bugs and contribute improvements to Emacs\n"
@@ -1680,32 +1747,42 @@ Each element in the list should be a list of strings or pairs
      :link ("Emacs Tutorial" ,(lambda (_button) (help-with-tutorial)))
      "\tLearn basic Emacs keystroke commands"
      ,(lambda ()
-       (let* ((en "TUTORIAL")
-	      (tut (or (get-language-info current-language-environment
-					  'tutorial)
-		       en))
-	      (title (with-temp-buffer
-		       (insert-file-contents
-			(expand-file-name tut tutorial-directory)
-			;; Read the entire file, to make sure any
-			;; coding cookies and other local variables
-			;; get acted upon.
-			nil)
-		       (search-forward ".")
-		       (buffer-substring (point-min) (1- (point))))))
-	 ;; If there is a specific tutorial for the current language
-	 ;; environment and it is not English, append its title.
-	 (if (string= en tut)
-	     ""
-	   (concat " (" title ")"))))
+        (let* ((en "TUTORIAL")
+	       (tut (or (get-language-info current-language-environment
+					   'tutorial)
+		        en))
+	       (title (with-temp-buffer
+		        (insert-file-contents
+			 (expand-file-name tut tutorial-directory)
+			 ;; Read the entire file, to make sure any
+			 ;; coding cookies and other local variables
+			 ;; get acted upon.
+			 nil)
+		        (search-forward ".")
+		        (buffer-substring (point-min) (1- (point))))))
+	  ;; If there is a specific tutorial for the current language
+	  ;; environment and it is not English, append its title.
+	  (if (string= en tut)
+	      ""
+	    (concat " (" title ")"))))
      "\n"
      :link ("Emacs Guided Tour"
 	    ,(lambda (_button)
                (browse-url "https://www.gnu.org/software/emacs/tour/"))
-	    "Browse https://www.gnu.org/software/emacs/tour/")
+	          "Browse https://www.gnu.org/software/emacs/tour/")
      "\tSee an overview of Emacs features at gnu.org\n"
+
+     :link ("Aquamacs Manual" (lambda (_button) (aquamacs-user-help)))
+     "\tView the Aquamacs manual using Apple Help\n"
+     :link ("Emacs Manual" (lambda (_button) (aquamacs-emacs-manual)))
+     "\tView the Emacs manual using Apple Help\n"
      :link ("Emacs Manual" ,(lambda (_button) (info-emacs-manual)))
-     "\tDisplay the Emacs manual in Info mode"))
+     "\tDisplay the Emacs manual in Info mode"
+
+     )
+
+
+    )
   "A list of texts to show in the middle part of the About screen.
 Each element in the list should be a list of strings or pairs
 `:face FACE', like `fancy-splash-insert' accepts them.")
@@ -1882,7 +1959,7 @@ a face or button specification."
 	     ,(lambda (_button)
 		(when startup-screen-inhibit-startup-screen
 		  (customize-set-variable 'inhibit-startup-screen t)
-		  (customize-mark-to-save 'inhibit-startup-screen)
+		  (customize-mark-to-save 'qinhibit-startup-screen)
 		  (custom-save-all))
 		(quit-windows-on "*GNU Emacs*" t)))
      "  ")
@@ -1927,8 +2004,8 @@ splash screen in another window."
 	(make-local-variable 'startup-screen-inhibit-startup-screen)
 	(if pure-space-overflow
 	    (insert pure-space-overflow-message))
-	(unless concise
-	  (fancy-splash-head))
+        ;; (unless concise
+	;;  (fancy-splash-head))
 	(dolist (text fancy-startup-text)
 	  (apply #'fancy-splash-insert text)
 	  (insert "\n"))
@@ -1961,8 +2038,15 @@ splash screen in another window."
   (let ((frame (fancy-splash-frame)))
     (save-selected-window
       (select-frame frame)
-      (switch-to-buffer "*About GNU Emacs*")
-      (setq buffer-undo-list t)
+      (if (fboundp 'switch-to-buffer-here)
+	  (switch-to-buffer-here "*About Aquamacs Emacs*")
+	(switch-to-buffer "*About Aquamacs Emacs*"))
+      (setq buffer-undo-list t
+	    mode-line-format
+	    (concat "----"
+		    (propertize "%b" 'face 'mode-line-buffer-id)
+		    "%-"))
+      (setq word-wrap t)
       (let ((inhibit-read-only t))
 	(erase-buffer)
 	(if pure-space-overflow
@@ -2023,7 +2107,7 @@ If optional argument STARTUP is non-nil, display the startup screen
 after Emacs starts.  If STARTUP is nil, display the About screen.
 If CONCISE is non-nil, display a concise version of the
 splash screen in another window."
-  (let ((splash-buffer (get-buffer-create "*About GNU Emacs*")))
+  (let ((splash-buffer (get-buffer-create "*About Aquamacs Emacs*")))
     (with-current-buffer splash-buffer
       (setq buffer-read-only nil)
       (erase-buffer)
@@ -2288,29 +2372,7 @@ Type \\[describe-distribution] for information on "))
   (let ((resize-mini-windows t))
     (or noninteractive                  ;(input-pending-p) init-file-had-error
 	;; t if the init file says to inhibit the echo area startup message.
-	(and inhibit-startup-echo-area-message
-	     user-init-file
-	     (or (and (get 'inhibit-startup-echo-area-message 'saved-value)
-		      (equal inhibit-startup-echo-area-message
-			     (if (equal init-file-user "")
-				 (user-login-name)
-			       init-file-user)))
-		 ;; Wasn't set with custom; see if .emacs has a setq.
-                 (condition-case nil
-                     (with-temp-buffer
-                       (insert-file-contents user-init-file)
-                       (re-search-forward
-                        (concat
-                         "([ \t\n]*setq[ \t\n]+"
-                         "inhibit-startup-echo-area-message[ \t\n]+"
-                         (regexp-quote
-                          (prin1-to-string
-                           (if (equal init-file-user "")
-                               (user-login-name)
-                             init-file-user)))
-                         "[ \t\n]*)")
-                        nil t))
-                   (error nil))))
+	inhibit-startup-echo-area-message
 	(message "%s" (startup-echo-area-message)))))
 
 (defun display-startup-screen (&optional concise)
@@ -2326,7 +2388,7 @@ screen."
       	(normal-splash-screen t concise))))
 
 (defun display-about-screen ()
-  "Display the *About GNU Emacs* buffer.
+  "Display the *About Aquamacs Emacs* buffer.
 A fancy display is used on graphic displays, normal otherwise."
   (interactive)
   (if (use-fancy-splash-screens-p)
@@ -2597,7 +2659,10 @@ nil default-directory" name)
                        (while (and hooks
                                    (not (setq did-hook (funcall (car hooks)))))
                          (setq hooks (cdr hooks)))
-                       (unless did-hook
+		     ;; OS X sends -psn_ arguments on occasion.
+		     (if (string-match "\\`-psn_"  argi)
+			 (setq did-hook t))
+		     (unless did-hook
                          ;; Presume that the argument is a file name.
                          (if (string-match "\\`-" argi)
                              (error "Unknown option `%s'" argi))
@@ -2691,6 +2756,13 @@ nil default-directory" name)
         ;; keystroke, and that's distracting.
         (when (fboundp 'frame-notice-user-settings)
           (frame-notice-user-settings))
+
+      ;; time to make the frame visible (Aquamacs)
+      (unless (and (eq initial-window-system 'ns)
+		   (ns-application-hidden-p))
+	(if (or show-scratch-buffer-on-startup
+		(not (equal (buffer-name (current-buffer)) "*scratch*")))
+	    (make-frame-visible)))
 
         ;; If there are no switches to process, we might as well
         ;; run this hook now, and there may be some need to do it

@@ -95,6 +95,10 @@
 
 ;; Changelog:
 
+;; Patch in Aquamacs:
+;;  o  Added support for XSB <http://xsb.sourceforge.net>; trivial
+;;     adaptation of a patch by Spyros Hadjichristodoulou and Cosmin
+;;     Munteanu
 ;; Version 1.22:
 ;;  o  Allowed both 'swipl' and 'pl' as names for the SWI Prolog
 ;;     interpreter.
@@ -316,6 +320,7 @@ eclipse - Eclipse Prolog
 mercury - Mercury
 sicstus - SICStus Prolog
 swi     - SWI Prolog
+xsb     - XSB <http://xsb.sourceforge.net>
 gnu     - GNU Prolog"
   :version "24.1"
   :group 'prolog
@@ -416,6 +421,9 @@ Legal values:
      ("built_in" "char_conversion" "discontiguous" "dynamic" "ensure_linked"
       "ensure_loaded" "foreign" "include" "initialization" "multifile" "op"
       "public" "set_prolog_flag"))
+    (xsb
+     ("dynamic" "import" "export" "from" "table" "auto_table" "ti" "multifile"
+      "true" "fail"))
     (t
      ;; FIXME: Shouldn't we just use the union of all the above here?
      ("dynamic" "module")))
@@ -542,6 +550,7 @@ the first column (i.e., DCG heads) inserts ` -->' and newline."
     (sicstus "sicstus")
     (swi ,(if (not (executable-find "swipl")) "pl" "swipl"))
     (gnu "gprolog")
+    (xsb "xsb")
     (t ,(let ((names '("prolog" "gprolog" "swipl" "pl")))
  	  (while (and names
  		      (not (executable-find (car names))))
@@ -574,6 +583,7 @@ the first column (i.e., DCG heads) inserts ` -->' and newline."
                      "prolog:zap_file(%m,%b,consult).")))
     (swi "[%f].")
     (gnu     "[%f].")
+    (xsb "[%f].")
     (t "reconsult(%f)."))
   "Alist of strings defining predicate for reconsulting.
 
@@ -1174,6 +1184,7 @@ Commands:
                            ((eq prolog-system 'sicstus) "[SICStus]")
                            ((eq prolog-system 'swi) "[SWI]")
                            ((eq prolog-system 'gnu) "[GNU]")
+                           ((eq prolog-system 'xsb) "[XSB]")
                            (t ""))))
   (prolog-mode-variables)
   (dolist (ar prolog-align-rules) (add-to-list 'align-rules-list ar))
@@ -1204,6 +1215,11 @@ Actually this is just customized `prolog-mode'."
   ;; Run once more to set up based on `prolog-system'
   (prolog-mode-variables))
 
+;;;###autoload
+(define-derived-mode xsb-mode prolog-mode "Prolog[XSB]" ()
+  "Major mode for editing XSB programs.
+Actually this is just customized `prolog-mode'."
+  (set (make-local-variable 'prolog-system) 'xsb))
 
 ;;-------------------------------------------------------------------
 ;; Inferior prolog mode

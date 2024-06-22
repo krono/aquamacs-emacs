@@ -1284,16 +1284,20 @@ If PROMOTE-TO-REGION is non-nil and event is a multiple-click, select
 the corresponding element around point, with the resulting position of
 point determined by `mouse-select-region-move-to-beginning'."
   (interactive "e\np")
-  (mouse-minibuffer-check event)
-  (if (and promote-to-region (> (event-click-count event) 1))
+
+  (condition-case nil
       (progn
-        (mouse-set-region event)
-        (when mouse-select-region-move-to-beginning
-          (when (> (posn-point (event-start event)) (region-beginning))
-            (exchange-point-and-mark))))
-    ;; Use event-end in case called from mouse-drag-region.
-    ;; If EVENT is a click, event-end and event-start give same value.
-    (posn-set-point (event-end event))))
+        (mouse-minibuffer-check event)
+        (if (and promote-to-region (> (event-click-count event) 1))
+            (progn
+              (mouse-set-region event)
+              (when mouse-select-region-move-to-beginning
+                (when (> (posn-point (event-start event)) (region-beginning))
+                  (exchange-point-and-mark))))
+          ;; Use event-end in case called from mouse-drag-region.
+          ;; If EVENT is a click, event-end and event-start give same value.
+          (posn-set-point (event-end event))))
+    (error nil)))
 
 (defvar mouse-last-region-beg nil)
 (defvar mouse-last-region-end nil)
@@ -1983,9 +1987,18 @@ if `mouse-drag-copy-region' is non-nil)."
 	   (eq click-pt mouse-save-then-kill-posn)
 	   (eq window (selected-window)))
       (if mouse-drag-copy-region
-          ;; Region already saved in the previous click;
+
           ;; don't make a duplicate entry, just delete.
-          (funcall region-extract-function 'delete-only)
+          ;; Aquamacs: use smart-delete-region always
+          ;; XXX It's not clear that smart-delete-region is the right
+          ;; choice. That change was made before Emacs switched to
+          ;; using region-extract-function. This probably requires a
+          ;; closer look.
+          ;; (funcall region-extract-function 'delete-only)
+          (smart-delete-region (mark t) (point))
+        ;; Aquamacs comment XXX
+        ;; to do: the following should be "smart"
+        ;; (but that was not done by Aquamacs 3.6)
         (kill-region (mark t) (point) 'region))
       (setq mouse-selection-click-count 0)
       (setq mouse-save-then-kill-posn nil))
@@ -2024,7 +2037,7 @@ if `mouse-drag-copy-region' is non-nil)."
       (exchange-point-and-mark)
       (mouse-set-region-1)
       (when mouse-drag-copy-region
-        (kill-new (filter-buffer-substring (mark t) (point))))
+        (kill-new (smart-spacing-filter-buffer-substring (mark t) (point))))
       (setq mouse-save-then-kill-posn click-pt)))))
 
 
@@ -2567,6 +2580,9 @@ and selects that window."
             (mouse-buffer-menu-split "Select Buffer"
                                      (mouse-buffer-menu-alist buffers))))))
 
+(defvar buffer-menu-modified-string "*")
+(defvar buffer-menu-read-only-string "%")
+
 (defun mouse-buffer-menu-alist (buffers)
   (let (tail
 	(maxlen 0)
@@ -2590,11 +2606,14 @@ and selects that window."
 		  (cons
 		   (cons
 		    (format
-		     (format "%%-%ds  %%s%%s  %%s" maxlen)
+		     (if window-system
+			 "%s %s%s%s  %s"  ; variable-width menu font!
+		       (format "%%-%ds %%s%%s%%s  %%s" maxlen))
 		     (buffer-name elt)
-		     (if (buffer-modified-p elt) "*" " ")
+		     (if (buffer-modified-p elt) buffer-menu-modified-string "")
 		     (with-current-buffer elt
-		       (if buffer-read-only "%" " "))
+		       (if buffer-read-only buffer-menu-read-only-string " "))
+		     ""
 		     (or (buffer-file-name elt)
 			 (with-current-buffer elt
 			   (if list-buffers-directory
@@ -2604,8 +2623,8 @@ and selects that window."
 		    elt)
 		   head))))
       (setq tail (cdr tail)))
-    ;; Compensate for the reversal that the above loop does.
-    (nreverse head)))
+    ;; Should be sorted to keep list stable
+    head))
 
 (defun mouse-buffer-menu-split (title alist)
   ;; If we have lots of buffers, divide them into groups of 20

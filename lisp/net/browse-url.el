@@ -1000,7 +1000,12 @@ The optional NEW-WINDOW argument is not used."
 The optional NEW-WINDOW argument is not used."
   (interactive (browse-url-interactive-arg "URL: "))
   (setq url (browse-url-encode-url url))
-  (start-process (concat "open " url) nil "open" url))
+  (condition-case nil
+      (ns-launch-URL-with-default-browser url)
+    (error
+     ;; fallback - sometimes http is not registered in the
+     ;; LaunchServices database
+     (start-process (concat "open " url) nil "open" url))))
 
 (function-put 'browse-url-default-macosx-browser 'browse-url-browser-kind
               'external)

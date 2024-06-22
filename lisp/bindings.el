@@ -107,6 +107,7 @@ corresponding to the mode line clicked."
       (setq desc
 	    (propertize
 	     mnemonic
+             'face 'mode-line-flags
 	     'help-echo (format "End-of-line style: %s\nmouse-1: Cycle"
 				(if (eq eol 0) "Unix-style LF"
 				  (if (eq eol 1) "DOS-style CRLF"
@@ -203,6 +204,7 @@ mouse-3: Set coding system"
   `(""
     (current-input-method
      (:propertize ("" current-input-method-title)
+		  face mode-line-flags
 		  help-echo (concat
 			     ,(purecopy "Current input method: ")
 			     current-input-method
@@ -213,6 +215,7 @@ mouse-3: Describe current input method"))
 		  mouse-face mode-line-highlight))
     ,(propertize
       "%z"
+      'face 'mode-line-flags
       'help-echo 'mode-line-mule-info-help-echo
       'mouse-face 'mode-line-highlight
       'local-map mode-line-coding-system-map)
@@ -249,6 +252,7 @@ mnemonics of the following coding systems:
 (defvar-local mode-line-modified
   (list (propertize
 	 "%1*"
+	 'face 'mode-line-flags
 	 'help-echo 'mode-line-read-only-help-echo
 	 'local-map (purecopy (make-mode-line-mouse-map
 			       'mouse-1
@@ -256,6 +260,7 @@ mnemonics of the following coding systems:
 	 'mouse-face 'mode-line-highlight)
 	(propertize
 	 "%1+"
+	 'face 'mode-line-flags
 	 'help-echo 'mode-line-modified-help-echo
 	 'local-map (purecopy (make-mode-line-mouse-map
 			       'mouse-1 #'mode-line-toggle-modified))

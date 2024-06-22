@@ -1541,7 +1541,12 @@ for instance using the window manager, then this produces a quit and
   else
     /* ??? Not really clean; should be CHECK_WINDOW_OR_FRAME,
        but I don't want to make one now.  */
-    CHECK_WINDOW (window);
+    {
+      f = SELECTED_FRAME ();
+      // Aquamacs provides an additional interface: nil -> selected frame
+      // on text-based terminals, just use the selected frame
+    }
+
 
   /* Note that xw_popup_dialog can call menu code, so
      Vmenu_updating_frame should be set (Bug#17891).  */

@@ -1590,6 +1590,13 @@ do_switch_frame (Lisp_Object frame, int track, int for_deletion, Lisp_Object nor
 #endif
     internal_last_event_frame = Qnil;
 
+  if (NILP (norecord))
+    {
+      block_input();
+      Vframe_list = Fcons (frame, Fdelq (frame, Vframe_list));
+      unblock_input();
+    }
+
   return frame;
 }
 
@@ -2878,7 +2885,7 @@ doesn't support multiple overlapping frames, this function selects FRAME.  */)
   if (FRAME_TERMCAP_P (f))
     /* On a text terminal select FRAME.  */
     Fselect_frame (frame, Qnil);
-  else
+  else if (FRAME_ICONIFIED_P (f))
     /* Do like the documentation says. */
     Fmake_frame_visible (frame);
 

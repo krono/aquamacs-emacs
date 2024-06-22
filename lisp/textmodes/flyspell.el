@@ -39,7 +39,10 @@
 ;;; Code:
 
 (require 'ispell)
+(require 'ns-spellchecker)
 (eval-when-compile (require 'cl-lib))
+(require 'thingatpt) ;; use (word-at-point) in ns-spellchecking functions
+(require 'osxkeys) ;; flyspell inherit regular Aquamacs context menu
 
 ;;*---------------------------------------------------------------------*/
 ;;*    Group ...                                                        */
@@ -285,9 +288,12 @@ If this variable is nil, all regions are treated as small."
 	       'flyspell-auto-correct-word))))
 
 (defcustom flyspell-auto-correct-binding
-  [(control ?\;)]
+  [(control ?\')]
   "The key binding for flyspell auto correction."
   :type 'key-sequence)
+
+(when (bound-and-true-p aquamacs-version)
+  (require 'flyspell-ns))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    Mode specific options                                            */
@@ -590,7 +596,8 @@ in your init file.
 (defun flyspell-hack-local-variables-hook ()
   ;; When local variables are loaded, see if the dictionary context
   ;; has changed.
-  (flyspell-accept-buffer-local-defs 'force))
+  ;; (flyspell-accept-buffer-local-defs 'force)
+  )
 
 (defun flyspell-kill-ispell-hook ()
   (setq flyspell-last-buffer nil)
@@ -1167,6 +1174,8 @@ spell-check."
 	    (setq flyspell-word-cache-end end)
 	    (setq flyspell-word-cache-word word)
 	    ;; now check spelling of word.
+	    (if (string= ispell-program-name "NSSpellChecker")
+		(setq poss (ns-spellchecker-parse-output word))
             (if (not known-misspelling)
                 (progn
                   (ispell-send-string "%\n")
@@ -1191,7 +1200,7 @@ spell-check."
                       (setq poss (ispell-parse-output (car ispell-filter)))))
               ;; Else, this was a known misspelling to begin with, and
               ;; we should forge an ispell return value.
-              (setq poss (list word 1 nil nil)))
+              (setq poss (list word 1 nil nil))))
 	    (let ((res (cond ((eq poss t)
 			      ;; correct
 			      (setq flyspell-word-cache-result t)
@@ -1595,7 +1604,12 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-large-region (beg end)
   (let* ((curbuf  (current-buffer))
-	 (buffer  (get-buffer-create "*flyspell-region*")))
+	 (buffer  (get-buffer-create "*flyspell-region*"))
+	 (current-dict-name (or ispell-local-dictionary ispell-dictionary-internal))
+	 (current-dict
+	  (if (eq ispell-use-cocoaspell-internal 'full)
+	      (aspell-dict-abbrev current-dict-name)
+	    current-dict-name)))
     (setq flyspell-external-ispell-buffer buffer)
     (setq flyspell-large-region-buffer curbuf)
     (setq flyspell-large-region-beg beg)
@@ -1608,8 +1622,7 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
     (set-buffer curbuf)
     (ispell-set-spellchecker-params)  ; Initialize variables and dicts alists
     ;; Local dictionary becomes the global dictionary in use.
-    (setq ispell-current-dictionary
-	  (or ispell-local-dictionary ispell-dictionary))
+    (setq ispell-current-dictionary current-dict-name)
     (setq ispell-current-personal-dictionary
 	  (or ispell-local-pdict ispell-personal-dictionary))
     (let ((args (ispell-get-ispell-args))
@@ -1618,7 +1631,7 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
       (if (and ispell-current-dictionary  ; use specified dictionary
 	       (not (member "-d" args)))  ; only define if not overridden
 	  (setq args
-		(append (list "-d" ispell-current-dictionary) args)))
+		(append (list "-d" current-dict) args)))
       (if ispell-current-personal-dictionary ; use specified pers dict
 	  (setq args
 		(append args
@@ -1689,9 +1702,21 @@ of a misspelled word removed when you've corrected it."
 	  (let ((old beg))
 	    (setq beg end)
 	    (setq end old)))
+      (if (string= ispell-program-name "NSSpellChecker")
+	  (progn
+	    (if (> (- end beg) (* ns-spellchecker-chunk-size 1.5))
+		;; large; spellcheck in chunks.
+		(ns-flyspell-large-region beg end)
+	      ;; not so large; spellcheck all at once.
+	      (ns-flyspell-region beg end))
+	    ;; check for and mark consecutive repeated words
+	    (flyspell-check-region-doublons beg end))
       (if (and flyspell-large-region (> (- end beg) flyspell-large-region))
 	  (flyspell-large-region beg end)
-	(flyspell-small-region beg end)))))
+	  (flyspell-small-region beg end))))
+    (if (and flyspell-mode-auto-on (not flyspell-mode))
+	(turn-on-flyspell))
+    ))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-buffer ...                                              */
@@ -1807,12 +1832,14 @@ FACE and MOUSE-FACE specify the `face' and `mouse-face' properties
 for the overlay."
   (let ((overlay (make-overlay beg end nil t nil)))
     (overlay-put overlay 'face face)
-    (overlay-put overlay 'mouse-face mouse-face)
+    ;; Aquamacs disable
+    ;; (overlay-put overlay 'mouse-face mouse-face)
     (overlay-put overlay 'flyspell-overlay t)
     (overlay-put overlay 'evaporate t)
-    (overlay-put overlay 'help-echo
-                 (concat (if context-menu-mode "mouse-3" "mouse-2")
-                         ": correct word at point"))
+    ;; Aquamacs disable
+    ;; (overlay-put overlay 'help-echo
+    ;;                 (concat (if context-menu-mode "mouse-3" "mouse-2")
+    ;;                         ": correct word at point"))
     (if context-menu-mode
         (overlay-put overlay 'context-menu-function 'flyspell-context-menu)
       ;; If misspelled text has a 'keymap' property, let that remain in
@@ -2023,8 +2050,10 @@ spell-check."
                     (word (car word))
                     poss ispell-filter)
                 (setq flyspell-auto-correct-word word)
-                ;; Now check spelling of word..
-                (ispell-send-string "%\n") ;Put in verbose mode.
+	      ;; now check spelling of word.
+	      (if (string= ispell-program-name "NSSpellChecker")
+		  (setq poss (ns-spellchecker-parse-output word))
+	      (ispell-send-string "%\n") ;put in verbose mode
                 (ispell-send-string (concat "^" word "\n"))
                 ;; Wait until ispell has processed word.
                 (while (progn
@@ -2037,7 +2066,7 @@ spell-check."
                 (or ispell-filter
                     (setq ispell-filter '(*)))
                 (if (consp ispell-filter)
-                    (setq poss (ispell-parse-output (car ispell-filter))))
+		    (setq poss (ispell-parse-output (car ispell-filter)))))
                 (cond
                  ((or (eq poss t) (stringp poss))
                   ;; Don't correct word.
@@ -2182,6 +2211,8 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 	      (word (car word))
 	      poss ispell-filter)
 	  ;; now check spelling of word.
+	  (if (string= ispell-program-name "NSSpellChecker")
+	      (setq poss (ns-spellchecker-parse-output word))
 	  (ispell-send-string "%\n")	;put in verbose mode
 	  (ispell-send-string (concat "^" word "\n"))
 	  ;; wait until ispell has processed word
@@ -2195,7 +2226,7 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 	  (or ispell-filter
 	      (setq ispell-filter '(*)))
 	  (if (consp ispell-filter)
-	      (setq poss (ispell-parse-output (car ispell-filter))))
+		(setq poss (ispell-parse-output (car ispell-filter)))))
 	  (cond
 	   ((or (eq poss t) (stringp poss))
 	    ;; don't correct word
@@ -2205,8 +2236,10 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 	    (error "Ispell: error in Ispell process"))
            (t
 	    ;; The word is incorrect, we have to propose a replacement.
-	    (flyspell-do-correct (flyspell-emacs-popup event poss word)
-				 poss word cursor-location start end opoint)))
+	    ;; restore point now, in case user selects a non-flyspell option.
+	    (goto-char opoint)
+	    (flyspell-emacs-popup
+	     event poss word cursor-location start end opoint)))
 	  (ispell-pdict-save t)))))
 
 ;;*---------------------------------------------------------------------*/
@@ -2219,22 +2252,28 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 	 nil)
 	((eq replace 'save)
          (goto-char save)
+         (if (string= ispell-program-name "NSSpellChecker")
+	     (ns-spellchecker-learn-word word)
 	 (ispell-send-string (concat "*" word "\n"))
 	 (ispell-send-string "#\n")
 	 (flyspell-unhighlight-at cursor-location)
-	 (setq ispell-pdict-modified-p '(t)))
+         )
 	((or (eq replace 'buffer) (eq replace 'session))
-	 (ispell-send-string (concat "@" word "\n"))
-	 (add-to-list 'ispell-buffer-session-localwords word)
-	 (or ispell-buffer-local-name ; session localwords might conflict
-	     (setq ispell-buffer-local-name (buffer-name)))
-	 (flyspell-unhighlight-at cursor-location)
-	 (if (null ispell-pdict-modified-p)
-	     (setq ispell-pdict-modified-p
-		   (list ispell-pdict-modified-p)))
-         (goto-char save)
+         (if (string= ispell-program-name "NSSpellChecker")
+	     (ns-spellchecker-ignore-word word (current-buffer))
+	   (ispell-send-string (concat "@" word "\n"))
+	   (add-to-list 'ispell-buffer-session-localwords word)
+	   (or ispell-buffer-local-name ; session localwords might conflict
+	       (setq ispell-buffer-local-name (buffer-name)))
+	   (flyspell-unhighlight-at cursor-location)
+	   (if (null ispell-pdict-modified-p)
+	       (setq ispell-pdict-modified-p
+		     (list ispell-pdict-modified-p)))
+	   (goto-char save))
 	 (if (eq replace 'buffer)
-	     (ispell-add-per-file-word-list word)))
+	     (ispell-add-per-file-word-list word))
+	 (flyspell-unhighlight-at cursor-location)
+	 )
 	(replace
          (flyspell-unhighlight-at cursor-location)
 	 (let ((old-max (point-max))
@@ -2247,12 +2286,13 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
              (delete-region start end)
              (goto-char start)
              (funcall flyspell-insert-function new-word)
-             (if flyspell-abbrev-p
+             (if (and (not (string= ispell-program-name "NSSpellChecker"))
+		      flyspell-abbrev-p)
                  (flyspell-define-abbrev word new-word)))
            (flyspell-adjust-cursor-point save cursor-location old-max)))
         (t
          (goto-char save)
-         nil)))
+         nil))))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-adjust-cursor-point ...                                  */
@@ -2271,44 +2311,130 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-emacs-popup ...                                         */
 ;;*---------------------------------------------------------------------*/
-(defun flyspell-emacs-popup (event poss word)
+;; flyspell-emacs-popup modified to define & use a keymap, so we can
+;; easily append another keymap (as "parent-keymap")
+(defun flyspell-emacs-popup (event poss word cursor-location start end save)
   "The Emacs popup menu."
   (if (and (not event)
            (display-mouse-p))
       (let* ((mouse-pos  (mouse-position))
-	     (mouse-pos  (if (nth 1 mouse-pos)
-			     mouse-pos
-			   (set-mouse-position (car mouse-pos)
-				 	       (/ (frame-width) 2) 2)
-			   (mouse-position))))
-	(setq event (list (list (car (cdr mouse-pos))
-				(1+ (cdr (cdr mouse-pos))))
-			  (car mouse-pos)))))
-  (let* ((corrects   (flyspell-sort (car (cdr (cdr poss))) word))
-	 (cor-menu   (if (consp corrects)
-			 (mapcar (lambda (correct)
-				   (list correct correct))
-				 corrects)
-		       '()))
-	 (affix      (car (cdr (cdr (cdr poss)))))
-	 ;; show-affix-info
-	 (base-menu  (let ((save (if nil ;; (and (consp affix) show-affix-info)
-				     (list
-				      (list (concat "Save affix: " (car affix))
-					    'save)
-				      '("Accept (session)" session)
-				      '("Accept (buffer)" buffer))
-				   '(("Save word" save)
-				     ("Accept (session)" session)
-				     ("Accept (buffer)" buffer)))))
-		       (if (consp cor-menu)
-			   (append cor-menu (cons "" save))
-			 save)))
-	 (menu       (cons "flyspell correction menu" base-menu)))
-    (car (x-popup-menu event
-		       (list (format "%s [%s]" word (or ispell-local-dictionary
-							ispell-dictionary))
-			     menu)))))
+             (mouse-pos  (if (nth 1 mouse-pos)
+                             mouse-pos
+                           (set-mouse-position (car mouse-pos)
+                                               (/ (frame-width) 2) 2)
+                           (mouse-position))))
+        (setq event (list (list (car (cdr mouse-pos))
+                                (1+ (cdr (cdr mouse-pos))))
+                          (car mouse-pos)))))
+  (let* ((corrects   (if flyspell-sort-corrections
+                         ;; reverse word order for proper menu display
+                         (reverse (sort (car (cdr (cdr poss))) 'string<))
+                       (reverse (car (cdr (cdr poss))))))
+         (affix      (car (cdr (cdr (cdr poss)))))
+         show-affix-info)
+
+    (setq flyspell-context-menu-map
+          (make-sparse-keymap
+           (if (string= ispell-program-name "NSSpellChecker")
+               (if (not (car (cdr (cdr poss))))
+                   "No Guesses Found"
+                 (format "%s" word))
+             (format "%s [%s]" word (or ispell-local-dictionary
+                                        ispell-dictionary)))))
+    ;; update aquamacs-context-menu-keymap
+    (if (eq osx-key-mode-mouse-3-behavior 'mouse-save-then-kill)
+        (setq aquamacs-context-menu-map-copy nil)
+      (aquamacs-update-context-menus)
+      (setq aquamacs-context-menu-map-copy
+            (copy-keymap aquamacs-context-menu-map)))
+    ;; add contents of aquamacs-context-menu-keymap to flyspell-context-menu-map
+    (set-keymap-parent flyspell-context-menu-map aquamacs-context-menu-map-copy)
+
+    (define-key flyspell-context-menu-map [flyspell-corr-sep2]
+                ;; only include this separator when we'll also have more menu below it
+                `(menu-item "--" 'ignore :visible (not (eq
+                                                        osx-key-mode-mouse-3-behavior
+                                                        'mouse-save-then-kill))))
+    (define-key flyspell-context-menu-map [buffer]
+                `(menu-item (if (string= ispell-program-name "NSSpellChecker")
+                                "Ignore Spelling & Comment Buffer"
+                              "Accept (buffer)")
+                            (lambda () (interactive)
+                              (flyspell-do-correct
+                               'buffer
+                               ',poss
+                               ,word
+                               ,cursor-location
+                               ,start
+                               ,end
+                               ,save))
+                            :help "Always consider spelling as correct in this buffer"))
+    (define-key flyspell-context-menu-map [session]
+                `(menu-item (if (string= ispell-program-name "NSSpellChecker")
+                                "Ignore Spelling"
+                              "Accept (session)")
+                            (lambda () (interactive)
+                              (flyspell-do-correct
+                               'session
+                               ',poss
+                               ,word
+                               ,cursor-location
+                               ,start
+                               ,end
+                               ,save))
+                            :help (if (string= ispell-program-name "NSSpellChecker")
+                                      "Consider spelling as correct in this buffer and session"
+                                    "Consider spelling correct for buffers in current session")))
+    (define-key flyspell-context-menu-map [save]
+                `(menu-item (if (string= ispell-program-name "NSSpellChecker")
+                                "Learn Spelling"
+                              "Save word")
+                            (lambda () (interactive)
+                              (flyspell-do-correct
+                               'save
+                               ',poss
+                               ,word
+                               ,cursor-location
+                               ,start
+                               ,end
+                               ,save))
+                            :help "Save spelling to dictionary"))
+    (define-key flyspell-context-menu-map [affix]
+                ;; affix is nil for NSSpellChecker, so not visible
+                `(menu-item (concat "Save affix: " ,(car affix))
+                            (lambda () (interactive)
+                              (flyspell-do-correct
+                               'save
+                               ',poss
+                               ,word
+                               ,cursor-location
+                               ,start
+                               ,end
+                               ,save))
+                            :help "Save affix construction to dictionary"
+                            :visible (and ,(consp affix) ,show-affix-info)))
+    (when (consp corrects)
+      (define-key flyspell-context-menu-map [flyspell-corr-sep] '(menu-item "--"))
+      (let ((count 0)
+            cor-count-str)
+        (mapc (lambda (correct)
+                ;; generate custom symbol to serve as each key
+                (setq count (1+ count)
+                      cor-count-str (concat "correct" (number-to-string count)))
+                (define-key flyspell-context-menu-map `[,(intern cor-count-str)]
+                            `(menu-item ,correct
+                                        (lambda () (interactive)
+                                          (flyspell-do-correct
+                                           ,correct
+                                           ',poss
+                                           ,word
+                                           ,cursor-location
+                                           ,start
+                                           ,end
+                                           ,save))
+                                        :help "Replace word with guess")))
+              corrects)))
+    (popup-menu flyspell-context-menu-map event nil)))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    Some example functions for real autocorrecting                   */

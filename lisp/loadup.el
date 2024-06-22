@@ -170,6 +170,7 @@
 
 (load "cus-face")
 (load "faces")  ; after here, `defface' may be used.
+(load "aquamacs-faces")
 
 
 ;; We don't want to store loaddefs.el in the repository because it is
@@ -408,6 +409,8 @@ lost after dumping")))
 			     files)))
       (setq emacs-repository-version (ignore-errors (emacs-repository-get-version))
             emacs-repository-branch (ignore-errors (emacs-repository-get-branch)))
+      (setq emacs-git-version (condition-case nil (emacs-git-get-version)
+                                (error nil)))
       ;; A constant, so we shouldn't change it with `setq'.
       (defconst emacs-build-number
 	(if versions (1+ (apply #'max versions)) 1))))

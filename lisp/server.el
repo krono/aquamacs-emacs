@@ -168,8 +168,10 @@ space (this means characters from ! to ~; or from code 33 to
 	  (string :tag "Password"))
   :version "24.3")
 
-(defcustom server-raise-frame t
-  "If non-nil, raise frame when switching to a buffer."
+(defcustom server-raise-frame
+  (if (eq initial-window-system 'ns) 'activate t)
+  "If non-nil, raise frame when switching to a buffer.
+On NS, if `activate', activate application as well."
   :type 'boolean
   :version "22.1")
 
@@ -1421,6 +1423,7 @@ The following commands are accepted by the client:
   "Move point to the position indicated in LINE-COL.
 LINE-COL should be a pair (LINE . COL)."
   (when line-col
+    (deactivate-mark)
     (goto-char (point-min))
     (forward-line (1- (car line-col)))
     (let ((column-number (cdr line-col)))
@@ -1672,8 +1675,10 @@ be a cons cell (LINENUMBER . COLUMNNUMBER)."
       ;; OK, we know next-buffer is live, let's display and select it.
       (if (functionp server-window)
 	  (funcall server-window next-buffer)
-	(let ((win (get-buffer-window next-buffer
-                                      (if this-frame-only nil 0))))
+	(let ((win (if (eq (window-buffer (selected-frame)) next-buffer)
+                       (selected-window)
+                     (get-buffer-window next-buffer
+                                        (if this-frame-only nil 0)))))
 	  (if (and win (not server-window))
 	      ;; The buffer is already displayed: just reuse the
 	      ;; window.  If FILEPOS is non-nil, use it to replace the
@@ -1715,7 +1720,10 @@ be a cons cell (LINENUMBER . COLUMNNUMBER)."
 	      ;; a minibuffer/dedicated-window (if there's no other).
 	      (error (pop-to-buffer next-buffer)))))))
     (when server-raise-frame
-      (select-frame-set-input-focus (window-frame)))))
+      (select-frame-set-input-focus (window-frame (selected-window)))
+      (and (eq server-raise-frame 'activate)
+	   (eq initial-window-system 'ns)
+	   (ns-hide-emacs 'activate)))))
 
 ;;;###autoload
 (defun server-save-buffers-kill-terminal (arg)

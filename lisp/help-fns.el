@@ -1517,11 +1517,13 @@ If FRAME is omitted or nil, use the selected frame."
 		(princ (substitute-command-keys "Defined in `"))
 		(princ (help-fns-short-filename file-name))
 		(princ (substitute-command-keys "'"))
-		;; Make a hyperlink to the library.
-		(save-excursion
-		  (re-search-backward
-                   (substitute-command-keys "`\\([^`']+\\)'") nil t)
-		  (help-xref-button 1 'help-face-def f file-name))
+                ;; Make a hyperlink to the library.
+
+		(unless (symbolp file-name)
+                  (save-excursion
+		    (re-search-backward
+                     (substitute-command-keys "`\\([^`']+\\)'") nil t)
+		    (help-xref-button 1 'help-face-def f file-name)))
 		(princ ".")
 		(terpri)
 		(terpri))))

@@ -74,4 +74,3 @@ DEFUN(exit, (status), int status)
 
   _exit(status);
 }
-

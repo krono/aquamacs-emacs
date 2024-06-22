@@ -694,11 +694,11 @@ The result is that the change is treated as having been made through Custom."
 			(string-match-p regexp (car loaded))
 			(setq found t)))
 		 found))
-	      ;; Without this, we would load cus-edit recursively.
-	      ;; We are still loading it when we call this,
-	      ;; and it is not in load-history yet.
+              ;; Without this, we would load cus-edit recursively.
+              ;; We are still loading it when we call this,
+              ;; and it is not in load-history yet.
 	      ((equal load "cus-edit"))
-              (t (ignore-errors (load load))))))))
+              (t (ignore-errors (load load nil 'quiet))))))))
 
 (defvar custom-local-buffer nil
   "Non-nil, in a Customization buffer, means customize a specific buffer.

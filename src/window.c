@@ -1014,6 +1014,24 @@ WINDOW must be a valid window and defaults to the selected one.  */)
   return make_fixnum (decode_valid_window (window)->top_line);
 }
 
+/*
+  Return non-nil if the header line in window w is to be inhibited.
+*/
+
+int
+window_header_line_inhibited_p(w)
+     struct window *w;
+{
+  Lisp_Object window;
+
+  if (!NILP(Vheader_line_inhibit_window_list))
+    {
+      XSETWINDOW (window, w);
+      return (!NILP (Fmember(window, Vheader_line_inhibit_window_list)));
+    }
+  return 0;
+}
+
 /* Return the number of lines/pixels of W's body.  Don't count any mode
    or header line or horizontal divider of W.  Rounds down to nearest
    integer when not working pixelwise. */
@@ -5423,6 +5441,7 @@ window_wants_header_line (struct window *w)
 	  && !EQ (window_header_line_format, Qnone)
 	  && (!NILP (window_header_line_format)
 	      || !NILP (BVAR (XBUFFER (WINDOW_BUFFER (w)), header_line_format)))
+	  && !window_header_line_inhibited_p (w)
 	  && (WINDOW_PIXEL_HEIGHT (w)
 	      > (window_wants_mode_line (w)
 		 ? 2 * WINDOW_FRAME_LINE_HEIGHT (w)
@@ -8259,6 +8278,13 @@ syms_of_window (void)
   DEFSYM (Qheader_line_format, "header-line-format");
   DEFSYM (Qtab_line_format, "tab-line-format");
   DEFSYM (Qno_other_window, "no-other-window");
+
+  Vheader_line_inhibit_window_list = Qnil;
+  staticpro (&Vheader_line_inhibit_window_list);
+
+  DEFVAR_LISP ("header-line-inhibit-window-list", Vheader_line_inhibit_window_list,
+	       doc: /* List of windows in which no header line is shown. */);
+  Vheader_line_inhibit_window_list = Qnil;
 
   DEFVAR_LISP ("temp-buffer-show-function", Vtemp_buffer_show_function,
 	       doc: /* Non-nil means call as function to display a help buffer.

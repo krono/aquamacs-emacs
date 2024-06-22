@@ -96,3 +96,7 @@ build-aux/msys-to-w32 diff=shell
 build-aux/update-subdirs diff=shell
 lib-src/rcs2log diff=shell
 /make-dist diff=shell
+
+# Added for Aquamacs
+# icon data file
+*.rsrc binary

@@ -73,6 +73,19 @@
 	       (cons 12 'ns-new-frame)
 	       (cons 13 'ns-toggle-toolbar)
 	       (cons 14 'ns-show-prefs)
+               (cons 17 'ns-change-color)
+	       (cons 20 'ns-check-spelling)
+	       (cons 21 'ns-spelling-change)
+	       (cons 22 'ns-toggle-fullscreen)
+	       (cons 90 'ns-application-activated)
+	       (cons 91 'ns-application-open-untitled)
+	       (cons 92 'ns-application-reopen)
+	       (cons 93 'ns-application-restore)
+	       (cons 94 'ns-application-store-state)
+	       (cons 130 'ns-about)               ;; Aquamacs only
+	       (cons 131 'ns-check-for-updates)   ;; Aquamacs only
+	       (cons 132 'ns-tool-bar-customized) ;; Aquamacs only
+	       (cons 133 'ns-save-panel-closed)   ;; Aquamacs only
 	       ))))
     (set-terminal-parameter frame 'x-setup-function-keys t)))
 
@@ -404,12 +417,15 @@ For X, the list comes from the `rgb.txt' file,v 10.41 94/02/20.
 For Nextstep, this is a list of non-PANTONE colors returned by
 the operating system.")
 
+;; Colors need to be set at runtime (not at compile-time/preload)
+(if (featurep 'ns) (setq x-colors (ns-list-colors)))
+
 (defvar w32-color-map)
 
 (defun xw-defined-colors (&optional frame)
   "Internal function called by `defined-colors', which see."
   (if (featurep 'ns)
-      x-colors
+      (ns-list-colors)
     (or frame (setq frame (selected-frame)))
     (let (defined-colors)
       (dolist (this-color (if (eq system-type 'windows-nt)
