@@ -249,6 +249,9 @@
 (load "simple")
 (load "emacs-lisp/seq")
 (load "emacs-lisp/nadvice")
+;; Base Emacs does not include advice. Can't currently tell why we
+;; need it now.
+(load "emacs-lisp/advice")
 (load "minibuffer") ;Needs cl-generic (and define-minor-mode).
 (load "frame")
 (load "startup")
