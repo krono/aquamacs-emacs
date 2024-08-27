@@ -31,25 +31,38 @@
 # XXX things I haven't come back to:
 # - Setting GZIP to nothing or ${which gzip} to save time in development
 
+# Print commands as executed
+set -x
 # Exit on error
 set -e
 # Save the build log
 BUILD_LOG=build.log
 exec &> >(tee ${BUILD_LOG})
 
+# Install needed Homebrew components
+brew install -q autoconf automake gnutls libjpeg librsvg texinfo gmp \
+     libgccjit jansson cairo imagemagick
+
+
 # Compiler flags: optimization & debugging info
 OPT_FLAGS="-O3 -g -Wno-deprecated-declarations"
 
 # Configure options
-CONFIG_PACKAGES="--with-gnutls --with-jpeg --with-rsvg ${DEBUG_CONFIG_OPTS}"
+# Not using --with-imagemagick now
+CONFIG_PACKAGES="--with-gnutls \
+                               --with-jpeg \
+                               --with-rsvg \
+                               --with-xwidgets \
+                               --with-json \
+                               --with-modules \
+                               ${DEBUG_CONFIG_OPTS}"
 
 # Options for enforcing some backwards compatibility. These may only
-# be needed for compatibility back to El Capitan (10.11). They can be
-# overridden in .aqbuildrc, but they should normally only matter in
-# release builds.
+# be needed for compatibility back to El Capitan (10.11).
 
 # COMPAT_CFLAGS="-Werror=partial-availability"
 # COMPAT_LDFLAGS="-Wl,-no_weak_imports"
+
 
 # In release builds, we set the environment variable
 # MACOSX_DEPLOYMENT_TARGET from this value. Setting the environment
@@ -61,7 +74,7 @@ CONFIG_PACKAGES="--with-gnutls --with-jpeg --with-rsvg ${DEBUG_CONFIG_OPTS}"
 # variable. If set to the empty string, no backward compatibility is
 # implied.
 
-MIN_VERSION=${MIN_VERSION:="10.11"}
+MIN_VERSION=${MIN_VERSION:="12"}
 export MACOSX_DEPLOYMENT_TARGET="${MIN_VERSION}"
 
 # GZIP can be set to the empty string in the environment to avoid the
@@ -85,16 +98,17 @@ export LIBXML2_LIBS=`xml2-config --libs`
 
 test -e configure || ./autogen.sh
 
-./configure --with-ns --without-x --without-dbus \
+./configure --with-ns \
+            --without-x \
+            --without-dbus \
             ${CONFIG_PACKAGES} \
-            CFLAGS="${OPT_FLAGS} ${COMPAT_CFLAGS} ${DEBUG_CFLAGS}" \
+            CFLAGS="-DAQUAMACS_EMACS ${OPT_FLAGS} ${COMPAT_CFLAGS} ${DEBUG_CFLAGS}" \
             LDFLAGS="${COMPAT_LDFLAGS}" \
     || exit 1
 
-make clean || exit
-
-make -j4 all || exit
-make install || exit
+gnumake clean || exit 1
+gnumake -j6 || exit 1
+gnumake install || exit 1
 
 # generate symbol archive (.dSYM file)
 dsymutil nextstep/Aquamacs.app/Contents/MacOS/Aquamacs
