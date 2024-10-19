@@ -40,9 +40,10 @@ BUILD_LOG=build.log
 exec &> >(tee ${BUILD_LOG})
 
 # Install needed Homebrew components
-brew install -q autoconf automake gnutls libjpeg librsvg texinfo gmp \
-     libgccjit jansson cairo imagemagick
-
+# TEMP: My laptop is out of the homebrew support window
+# brew install -q autoconf automake gnutls libjpeg librsvg texinfo gmp \
+#      libgccjit jansson cairo imagemagick
+#
 
 # Compiler flags: optimization & debugging info
 OPT_FLAGS="-O3 -g -Wno-deprecated-declarations"
@@ -52,6 +53,7 @@ OPT_FLAGS="-O3 -g -Wno-deprecated-declarations"
 CONFIG_PACKAGES="--with-gnutls \
                                --with-jpeg \
                                --with-rsvg \
+                               --with-webp \
                                --with-xwidgets \
                                --with-json \
                                --with-modules \
