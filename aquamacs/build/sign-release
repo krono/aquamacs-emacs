@@ -4,12 +4,12 @@
 # Only works if the AQUAMACS_CERT variable is defined, giving the
 # identity to be used.
 
-AQUAMACS_CERT=AAF180423BA3E8A2A36167F7024E9B7E774F41B3
-APPDIR="nextstep/Aquamacs.app"
+SRCDIR="$1"
+APPDIR="$2"
 RESDIR="${APPDIR}/Contents/Resources"
 NEWBIN="${RESDIR}/bin"
 MACDIR="${APPDIR}/Contents/MacOS"
-BUILDTOOLS="aquamacs/build"
+BUILDTOOLS="${SRCDIR}/aquamacs/build"
 
 # Move scripts out of the MacOS directory in the bundle, because Apple doesn't like that.
 mkdir ${NEWBIN}
@@ -25,7 +25,7 @@ if [[ "${AQUAMACS_CERT}" != "" ]]; then
     # codesign -s "$AQUAMACS_CERT" --force --timestamp \
     #         --options=runtime ${APPDIR}
 
-    for f in "${APPDIR}"/Contents/MacOS/{bin/*,libexec/*,lib/*,Aquamacs} ${APPDIR}; do
+    for f in "${APPDIR}"/Contents/MacOS/{bin/*,libexec/*,../Frameworks/*,Aquamacs} ${APPDIR}; do
         codesign -s "$AQUAMACS_CERT" --force --timestamp \
                  --options=runtime \
                  --entitlements "${BUILDTOOLS}/entitlements.plist" \
