@@ -193,16 +193,8 @@ Must be greater than 1."
 
 ;; Set NSSpellChecker as the default; no need to see if it's installed
 ;;;###autoload
-(defcustom ispell-program-name
-  (if (bound-and-true-p aquamacs-version)
-      "NSSpellChecker"
-    (or (executable-find "aspell")
-        (executable-find "ispell")
-        (executable-find "hunspell")
-        ;; Enchant is commonly installed as `enchant-2', so use this
-        ;; name and avoid old versions of `enchant'.
-        (executable-find "enchant-2")
-        "ispell"))
+
+(defcustom ispell-program-name "NSSpellChecker"
   "Program invoked by \\[ispell-word] and \\[ispell-region] commands."
   :type 'string
   :set (lambda (symbol value)
