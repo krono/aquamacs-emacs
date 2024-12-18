@@ -1,0 +1,101 @@
+#!/bin/bash
+
+if [ $# -ne 3 ]; then
+    echo "Usage: $0 <m1-build-dir> <x86-build-dir> <output-app>"
+    exit 1
+fi
+
+M1_BUILD="$1"
+X86_BUILD="$2"
+OUTPUT_APP="$3"
+
+M1_APP="$M1_BUILD/nextstep/Aquamacs.app"
+X86_APP="$X86_BUILD/nextstep/Aquamacs.app"
+
+# Validate input directories
+if [ ! -d "$M1_APP" ] || [ ! -d "$X86_APP" ]; then
+    echo "Error: Input app bundles not found in nextstep/Aquamacs.app"
+    echo "Looked in: $M1_APP"
+    echo "       and $X86_APP"
+    exit 1
+fi
+
+# Check if output already exists
+if [ -e "$OUTPUT_APP" ]; then
+    echo "Error: Output path already exists: $OUTPUT_APP"
+    echo "Please remove it first or specify a different output path"
+    exit 1
+fi
+
+# Create output directory structure and copy all files from M1 build
+echo "Copying base app structure..."
+cp -R "$M1_APP" "$OUTPUT_APP"
+
+# Function to merge binaries
+merge_binary() {
+    local arm_path="$1"
+    local x86_path="$2"
+    local output_path="$3"
+
+    if [ -f "$arm_path" ] && [ -f "$x86_path" ]; then
+        echo "Creating universal binary: $output_path"
+        lipo -create -arch arm64 "$arm_path" -arch x86_64 "$x86_path" -output "$output_path"
+    else
+        echo "Warning: Missing one or both architectures for: $output_path"
+    fi
+}
+
+# Merge main executable
+echo "Merging main executable..."
+merge_binary \
+    "$M1_APP/Contents/MacOS/Aquamacs" \
+    "$X86_APP/Contents/MacOS/Aquamacs" \
+    "$OUTPUT_APP/Contents/MacOS/Aquamacs"
+
+# Find and merge all executables in MacOS directory
+echo "Checking for additional executables in MacOS directory..."
+if [ -d "$M1_APP/Contents/MacOS" ]; then
+    for exec in "$M1_APP/Contents/MacOS"/*; do
+        if [ -f "$exec" ]; then
+            base_exec=$(basename "$exec")
+            if [ "$base_exec" != "Aquamacs" ]; then  # Skip main executable as it's already handled
+                x86_exec="$X86_APP/Contents/MacOS/$base_exec"
+                out_exec="$OUTPUT_APP/Contents/MacOS/$base_exec"
+                if [ -f "$x86_exec" ]; then
+                    merge_binary "$exec" "$x86_exec" "$out_exec"
+                fi
+            fi
+        fi
+    done
+fi
+
+# Function to get list of frameworks
+get_frameworks() {
+    local app_path="$1"
+    if [ -d "$app_path/Contents/Frameworks" ]; then
+        ls "$app_path/Contents/Frameworks"
+    fi
+}
+
+# Get unique list of frameworks from both builds
+frameworks=$(printf "%s\n" $(get_frameworks "$M1_APP") $(get_frameworks "$X86_APP") | sort -u)
+
+# Merge frameworks
+echo "Merging frameworks..."
+for framework in $frameworks; do
+    merge_binary \
+        "$M1_APP/Contents/Frameworks/$framework" \
+        "$X86_APP/Contents/Frameworks/$framework" \
+        "$OUTPUT_APP/Contents/Frameworks/$framework"
+done
+
+# Update permissions
+echo "Setting permissions..."
+chmod 755 "$OUTPUT_APP/Contents/MacOS"/*
+find "$OUTPUT_APP/Contents/Frameworks" -type f -exec chmod 644 {} \;
+
+echo "Universal binary app bundle created at: $OUTPUT_APP"
+echo ""
+echo "You can verify architectures with:"
+echo "lipo -info $OUTPUT_APP/Contents/MacOS/Aquamacs"
+echo "find \"$OUTPUT_APP/Contents/Frameworks\" -type f -exec lipo -info {} \\;"
