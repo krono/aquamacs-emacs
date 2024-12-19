@@ -29,7 +29,6 @@
 (defmacro aq-preload (f)
   `(load (concat aq-compile-path ,f)))
 
-;; (load "ns-spellchecker.el")
 ;; this will only work if files have been byte-compiled.
 (load "emacs-lisp/pcase") ;; for easymenu
 (load "emacs-lisp/easy-mmode")

@@ -39,7 +39,6 @@
 ;;; Code:
 
 (require 'ispell)
-(require 'ns-spellchecker)
 (eval-when-compile (require 'cl-lib))
 (require 'thingatpt) ;; use (word-at-point) in ns-spellchecking functions
 (require 'osxkeys) ;; flyspell inherit regular Aquamacs context menu
