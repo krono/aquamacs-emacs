@@ -2683,17 +2683,17 @@ Global `ispell-quit' set to start location to continue spell session."
 		   ((or (= char ?a) (= char ?A)) ; accept word without insert
 		    (if (string= ispell-program-name "NSSpellChecker")
 			(ns-spellchecker-ignore-word word (current-buffer))
-		      (ispell-send-string (concat "@" word "\n")))
-                    (cl-pushnew word ispell-buffer-session-localwords
-                                :test #'equal)
-                    (when flyspell-mode
-                      (flyspell-unhighlight-at start))
-                    (or ispell-buffer-local-name ; session localwords might conflict
-			(setq ispell-buffer-local-name (buffer-name)))
-                    (if (null ispell-pdict-modified-p)
-			(setq ispell-pdict-modified-p
-			      (list ispell-pdict-modified-p)))
-		    (if (= char ?A) 0))	; return 0 for ispell-add buffer-local
+		      (ispell-send-string (concat "@" word "\n"))
+                      (cl-pushnew word ispell-buffer-session-localwords
+                                  :test #'equal)
+                      (when flyspell-mode
+                        (flyspell-unhighlight-at start))
+                      (or ispell-buffer-local-name ; session localwords might conflict
+			  (setq ispell-buffer-local-name (buffer-name)))
+                      (if (null ispell-pdict-modified-p)
+			  (setq ispell-pdict-modified-p
+			        (list ispell-pdict-modified-p))))
+                    (if (= char ?A) 0))	; return 0 for ispell-add buffer-local
 		   ((or (= char ?r) (= char ?R)) ; type in replacement
 		    (and (eq 'block ispell-highlight-p) ; refresh tty's
 			 (ispell-highlight-spelling-error start end nil t))
@@ -2784,9 +2784,9 @@ Global `ispell-quit' set to start location to continue spell session."
 		   ((= char ?u)		; insert lowercase into dictionary
 		    (if (string= ispell-program-name "NSSpellChecker")
 			(ns-spellchecker-learn-word (downcase word))
-		      (ispell-send-string (concat "*" (downcase word) "\n")))
-                    (setq ispell-pdict-modified-p '(t)) ; dictionary modified!
-		    nil)
+		      (ispell-send-string (concat "*" (downcase word) "\n"))
+                      (setq ispell-pdict-modified-p '(t))) ; dictionary modified!
+                    nil)
                    ((= char ?m)		; type in what to insert
 		    (if (string= ispell-program-name "NSSpellChecker")
 			(ns-spellchecker-learn-word (read-string "Insert: " word))
